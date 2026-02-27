@@ -21,6 +21,36 @@ window.addEventListener("DOMContentLoaded", async () => {
   const modelList = document.getElementById("model-list") as HTMLElement;
   const modelStatus = document.getElementById("model-status") as HTMLElement;
 
+  const sidebarNav = document.getElementById("sidebar-nav") as HTMLElement;
+  const sections = document.querySelectorAll(".content-section");
+
+  // Sidebar Navigation Logic
+  sidebarNav.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const navItem = target.closest(".nav-item") as HTMLElement;
+    if (!navItem) return;
+
+    e.preventDefault();
+    const sectionId = navItem.dataset.section;
+
+    // Update nav items
+    document.querySelectorAll(".nav-item").forEach(item => {
+      item.classList.remove("active", "bg-primary", "text-background-dark", "shadow-[0_0_15px_rgba(13,242,89,0.3)]");
+      item.classList.add("text-[#9cbaa6]");
+    });
+    navItem.classList.add("active", "bg-primary", "text-background-dark", "shadow-[0_0_15px_rgba(13,242,89,0.3)]");
+    navItem.classList.remove("text-[#9cbaa6]");
+
+    // Show/Hide sections
+    sections.forEach(section => {
+      if (section.id === `section-${sectionId}`) {
+        section.classList.remove("hidden");
+      } else {
+        section.classList.add("hidden");
+      }
+    });
+  });
+
   listen("status-update", (event: any) => {
     statusText.innerText = event.payload as string;
   });
@@ -56,8 +86,12 @@ window.addEventListener("DOMContentLoaded", async () => {
         const li = document.createElement("li");
         li.className = "language-item";
         li.innerHTML = `
-                    <span>${LANGUAGE_NAMES[lang] || lang} (${lang})</span>
-                    <button class="remove-btn" data-lang="${lang}">×</button>
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+                        <span class="text-white font-medium">${LANGUAGE_NAMES[lang] || lang}</span>
+                        <span class="text-[#9cbaa6] text-xs uppercase font-bold tracking-widest">${lang}</span>
+                    </div>
+                    <span class="material-symbols-outlined remove-btn text-[20px]" data-lang="${lang}">close</span>
                 `;
         myLanguagesList.appendChild(li);
       });
@@ -69,17 +103,24 @@ window.addEventListener("DOMContentLoaded", async () => {
         const isSelected = settings.selected_model === model.name;
 
         const modelDiv = document.createElement("div");
-        modelDiv.className = `model-item ${isSelected ? "selected" : ""}`;
+        modelDiv.className = `glass-panel rounded-2xl p-4 flex items-center justify-between group hover:border-primary/30 transition-all duration-300 model-item ${isSelected ? "selected" : ""}`;
         modelDiv.innerHTML = `
-          <div class="model-info">
-            <span class="model-name">${model.name}</span>
-            <span class="model-meta">${model.size} • ${model.description}</span>
+          <div class="flex items-center gap-4">
+            <div class="flex items-center justify-center rounded-xl bg-[#28392e] ${isSelected ? 'text-primary' : 'text-white'} shrink-0 size-10 shadow-inner">
+               <span class="material-symbols-outlined text-[20px]">description</span>
+            </div>
+            <div class="flex flex-col">
+              <div class="flex items-center gap-2">
+                <p class="text-white font-semibold group-hover:text-primary transition-colors">${model.name}</p>
+                ${isSelected ? '<span class="status-pill">Active</span>' : ""}
+              </div>
+              <p class="text-[#9cbaa6] text-xs">${model.size} • ${model.description}</p>
+            </div>
           </div>
-          <div class="model-actions">
-            ${isSelected ? '<span class="status-pill">Active</span>' : ""}
-            ${!isDownloaded ? `<button class="download-btn" data-model="${model.name}">Download</button>` : ""}
-            ${isDownloaded && !isSelected ? `<button class="use-btn" data-model="${model.name}">Select</button>` : ""}
-            ${isDownloaded ? `<button class="delete-btn" data-model="${model.name}">Delete</button>` : ""}
+          <div class="flex gap-2">
+            ${!isDownloaded ? `<button class="download-btn px-4 py-1.5 rounded-lg bg-primary text-background-dark text-xs font-bold hover:scale-[1.05] transition-all" data-model="${model.name}">Download</button>` : ""}
+            ${isDownloaded && !isSelected ? `<button class="use-btn px-4 py-1.5 rounded-lg border border-primary/30 text-primary text-xs font-bold hover:bg-primary/10 transition-all" data-model="${model.name}">Select</button>` : ""}
+            ${isDownloaded ? `<button class="delete-btn px-4 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs font-bold hover:bg-red-500/10 transition-all" data-model="${model.name}">Delete</button>` : ""}
           </div>
         `;
         modelList.appendChild(modelDiv);

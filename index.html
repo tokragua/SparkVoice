@@ -1,75 +1,263 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="stylesheet" href="/src/styles.css" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SparkVoice Settings</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#0df259",
+            "background-light": "#f5f8f6",
+            "background-dark": "#102216",
+            "surface-dark": "#1a261e",
+            "surface-light": "#ffffff",
+          },
+          fontFamily: {
+            "display": ["Space Grotesk", "sans-serif"],
+            "body": ["Noto Sans", "sans-serif"],
+          },
+        },
+      },
+    }
+  </script>
   <script type="module" src="/src/main.ts" defer></script>
 </head>
 
-<body>
-  <main class="container">
-    <h1>SparkVoice Settings</h1>
-
-    <div class="settings-group">
-      <label for="audio-input-select">Audio Input:</label>
-      <select id="audio-input-select">
-        <option value="">Default System Microphone</option>
-      </select>
-    </div>
-
-    <div class="settings-group">
-      <label for="device-select">Computing Device:</label>
-      <select id="device-select">
-        <option value="cuda">CUDA GPU</option>
-        <option value="cpu">CPU</option>
-      </select>
-    </div>
-
-    <div class="settings-group">
-      <h3>Language Support</h3>
-      <div class="language-selection">
-        <label for="language-select">Active Language:</label>
-        <select id="language-select">
-          <!-- Populated by JS -->
-        </select>
+<body
+  class="bg-background-dark text-slate-100 font-display antialiased h-screen overflow-hidden flex selection:bg-primary selection:text-background-dark">
+  <!-- Sidebar -->
+  <aside class="w-80 flex-shrink-0 flex flex-col h-full bg-[#111813] border-r border-[#28392e] relative z-20">
+    <!-- App Header -->
+    <div class="p-6 pb-2">
+      <div class="flex items-center gap-4 mb-8">
+        <div class="bg-primary/20 rounded-xl size-12 shadow-lg shadow-primary/10 flex items-center justify-center">
+          <span class="material-symbols-outlined text-primary text-3xl">keyboard_voice</span>
+        </div>
+        <div class="flex flex-col">
+          <h1 class="text-white text-lg font-bold leading-tight tracking-tight">SparkVoice</h1>
+          <div class="flex items-center gap-2">
+            <span class="inline-block size-2 rounded-full bg-primary animate-pulse"></span>
+            <p class="text-[#9cbaa6] text-xs font-medium uppercase tracking-wider">v1.0.0</p>
+          </div>
+        </div>
       </div>
-
-      <div class="language-list-container">
-        <label>My Languages:</label>
-        <ul id="my-languages-list" class="language-list">
-          <!-- Populated by JS -->
-        </ul>
-      </div>
-
-      <div class="add-language-container">
-        <select id="available-languages-select">
-          <option value="">-- Add a language --</option>
-          <!-- Populated by JS -->
-        </select>
-        <button id="add-language-btn" class="secondary-btn">Add</button>
+      <!-- Navigation -->
+      <nav class="flex flex-col gap-2" id="sidebar-nav">
+        <a class="nav-item active flex items-center gap-3 px-4 py-3 rounded-xl bg-primary text-background-dark shadow-[0_0_15px_rgba(13,242,89,0.3)] transition-all hover:scale-[1.02]"
+          href="#" data-section="general">
+          <span class="material-symbols-outlined text-[24px]">settings</span>
+          <span class="text-base font-bold">General</span>
+        </a>
+        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] hover:bg-[#1a261e] hover:text-white transition-all group"
+          href="#" data-section="speech">
+          <span class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">language</span>
+          <span class="text-sm font-medium">Language & Speech</span>
+        </a>
+        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] hover:bg-[#1a261e] hover:text-white transition-all group"
+          href="#" data-section="device">
+          <span class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">mic</span>
+          <span class="text-sm font-medium">Input Device</span>
+        </a>
+        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] hover:bg-[#1a261e] hover:text-white transition-all group"
+          href="#" data-section="hotkeys">
+          <span class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">keyboard</span>
+          <span class="text-sm font-medium">Hotkeys</span>
+        </a>
+      </nav>
+    </div>
+    <!-- Bottom Sidebar -->
+    <div class="mt-auto p-6 border-t border-[#28392e]">
+      <div class="flex flex-col gap-2 scale-90">
+        <p class="text-[#9cbaa6] text-xs font-medium uppercase tracking-wider">Status</p>
+        <div class="flex items-center gap-2">
+          <span id="status-text" class="text-white text-sm font-bold truncate">Ready</span>
+        </div>
       </div>
     </div>
+  </aside>
 
-    <div class="settings-group">
-      <h3>Model Management</h3>
-      <p class="hint">Higher accuracy models are larger and slower.</p>
-      <div id="model-list" class="model-list">
-        <!-- Populated by JS -->
+  <!-- Main Content Area -->
+  <main class="flex-1 flex flex-col h-full overflow-hidden bg-background-dark relative">
+    <div class="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[100px] pointer-events-none">
+    </div>
+    <div class="h-full overflow-y-auto p-8 lg:p-12">
+      <div class="max-w-4xl mx-auto flex flex-col gap-8 pb-12">
+
+        <!-- Section: General -->
+        <section id="section-general" class="content-section flex flex-col gap-4">
+          <div class="flex flex-col gap-2 mb-4">
+            <h2 class="text-4xl font-bold text-white tracking-tight">General Settings</h2>
+            <p class="text-[#9cbaa6] text-lg font-light">Customize how SparkVoice behaves on your system.</p>
+          </div>
+
+          <div
+            class="glass-panel rounded-2xl p-5 flex items-center justify-between group hover:border-primary/30 transition-all duration-300">
+            <div class="flex items-center gap-5">
+              <div
+                class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                <span class="material-symbols-outlined">power_settings_new</span>
+              </div>
+              <div class="flex flex-col">
+                <p class="text-white text-lg font-semibold group-hover:text-primary transition-colors">Launch on Startup
+                </p>
+                <p class="text-[#9cbaa6] text-sm">Automatically start SparkVoice when you log in.</p>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" class="sr-only peer" checked disabled>
+              <div
+                class="w-14 h-7 bg-[#28392e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-[0_0_10px_rgba(13,242,89,0.5)] opacity-50">
+              </div>
+            </label>
+          </div>
+
+          <div
+            class="glass-panel rounded-2xl p-5 flex items-center justify-between group hover:border-primary/30 transition-all duration-300">
+            <div class="flex items-center gap-5">
+              <div
+                class="flex items-center justify-center rounded-xl bg-[#28392e] text-white shrink-0 size-12 shadow-inner shadow-black/20 group-hover:text-primary transition-colors">
+                <span class="material-symbols-outlined">minimize</span>
+              </div>
+              <div class="flex flex-col">
+                <p class="text-white text-lg font-semibold">Minimize to System Tray</p>
+                <p class="text-[#9cbaa6] text-sm">Keep the application running when closed.</p>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" class="sr-only peer" checked disabled>
+              <div
+                class="w-14 h-7 bg-[#28392e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-[0_0_10px_rgba(13,242,89,0.5)] opacity-50">
+              </div>
+            </label>
+          </div>
+        </section>
+
+        <!-- Section: Language & Speech -->
+        <section id="section-speech" class="content-section hidden flex flex-col gap-4">
+          <div class="flex flex-col gap-2 mb-4">
+            <h2 class="text-4xl font-bold text-white tracking-tight">Language & Speech</h2>
+            <p class="text-[#9cbaa6] text-lg font-light">Manage your languages and transcription models.</p>
+          </div>
+
+          <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
+            <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">Active Language</h3>
+            <div class="relative">
+              <select id="language-select"
+                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
+                <!-- Populated by JS -->
+              </select>
+              <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-primary">
+                <span class="material-symbols-outlined">language</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
+            <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">My Languages</h3>
+            <ul id="my-languages-list" class="flex flex-col gap-2">
+              <!-- Populated by JS -->
+            </ul>
+            <div class="flex gap-2 mt-2">
+              <div class="relative flex-1">
+                <select id="available-languages-select"
+                  class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-2 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer text-sm">
+                  <option value="">-- Add a language --</option>
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+              <button id="add-language-btn"
+                class="px-6 py-2 rounded-xl bg-primary text-background-dark font-bold hover:scale-[1.02] transition-all">Add</button>
+            </div>
+          </div>
+
+          <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
+            <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">Model Management</h3>
+            <p class="text-[#9cbaa6] text-sm">Higher accuracy models are larger and slower.</p>
+            <div id="model-status" class="text-primary text-xs font-medium h-4"></div>
+            <div id="model-list" class="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-2">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- Section: Device -->
+        <section id="section-device" class="content-section hidden flex flex-col gap-4">
+          <div class="flex flex-col gap-2 mb-4">
+            <h2 class="text-4xl font-bold text-white tracking-tight">Input Device</h2>
+            <p class="text-[#9cbaa6] text-lg font-light">Configure your audio input and computing device.</p>
+          </div>
+
+          <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
+            <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">Microphone</h3>
+            <div class="relative">
+              <select id="audio-input-select"
+                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
+                <option value="">Default System Microphone</option>
+              </select>
+              <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-primary">
+                <span class="material-symbols-outlined">mic</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
+            <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">Computing Device</h3>
+            <div class="relative">
+              <select id="device-select"
+                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
+                <option value="cuda">CUDA GPU</option>
+                <option value="cpu">CPU</option>
+              </select>
+              <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-primary">
+                <span class="material-symbols-outlined">memory</span>
+              </div>
+            </div>
+            <p class="text-[#9cbaa6] text-xs px-1">Use CUDA for significantly faster transcription if you have an NVIDIA
+              GPU.</p>
+          </div>
+        </section>
+
+        <!-- Section: Hotkeys -->
+        <section id="section-hotkeys" class="content-section hidden flex flex-col gap-4">
+          <div class="flex flex-col gap-2 mb-4">
+            <h2 class="text-4xl font-bold text-white tracking-tight">Hotkeys</h2>
+            <p class="text-[#9cbaa6] text-lg font-light">Manage keyboard shortcuts for SparkVoice.</p>
+          </div>
+
+          <div
+            class="glass-panel rounded-2xl p-6 flex items-center justify-between group hover:border-primary/30 transition-all duration-300">
+            <div class="flex items-center gap-5">
+              <div
+                class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                <span class="material-symbols-outlined">keyboard</span>
+              </div>
+              <div class="flex flex-col">
+                <p class="text-white text-lg font-semibold">Toggle Recording</p>
+                <p class="text-[#9cbaa6] text-sm">Start or stop voice capture.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <kbd class="px-4 py-2 bg-[#28392e] rounded-lg text-primary font-bold border border-[#3a5242]">F2</kbd>
+              <span class="text-[#9cbaa6] text-xs font-light">(Customization coming soon)</span>
+            </div>
+          </div>
+        </section>
+
       </div>
-      <div id="model-status" class="model-status"></div>
-    </div>
-
-    <div class="settings-group">
-      <label for="hotkey-input">Hotkey:</label>
-      <input id="hotkey-input" value="F2" disabled />
-      <span class="hint">(Custom hotkeys coming soon)</span>
-    </div>
-
-    <div class="settings-group">
-      <p>Status: <span id="status-text">Ready</span></p>
     </div>
   </main>
 </body>
