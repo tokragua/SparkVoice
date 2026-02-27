@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="/src/styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SparkVoice Settings</title>
+  <script type="module" src="/src/main.ts" defer></script>
+</head>
+
+<body>
+  <main class="container">
+    <h1>SparkVoice Settings</h1>
+
+    <div class="settings-group">
+      <label for="audio-input-select">Audio Input:</label>
+      <select id="audio-input-select">
+        <option value="">Default System Microphone</option>
+      </select>
+    </div>
+
+    <div class="settings-group">
+      <label for="device-select">Computing Device:</label>
+      <select id="device-select">
+        <option value="cuda">CUDA GPU</option>
+        <option value="cpu">CPU</option>
+      </select>
+    </div>
+
+    <div class="settings-group">
+      <h3>Language Support</h3>
+      <div class="language-selection">
+        <label for="language-select">Active Language:</label>
+        <select id="language-select">
+          <!-- Populated by JS -->
+        </select>
+      </div>
+
+      <div class="language-list-container">
+        <label>My Languages:</label>
+        <ul id="my-languages-list" class="language-list">
+          <!-- Populated by JS -->
+        </ul>
+      </div>
+
+      <div class="add-language-container">
+        <select id="available-languages-select">
+          <option value="">-- Add a language --</option>
+          <!-- Populated by JS -->
+        </select>
+        <button id="add-language-btn" class="secondary-btn">Add</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <h3>Model Management</h3>
+      <p class="hint">Higher accuracy models are larger and slower.</p>
+      <div id="model-list" class="model-list">
+        <!-- Populated by JS -->
+      </div>
+      <div id="model-status" class="model-status"></div>
+    </div>
+
+    <div class="settings-group">
+      <label for="hotkey-input">Hotkey:</label>
+      <input id="hotkey-input" value="F2" disabled />
+      <span class="hint">(Custom hotkeys coming soon)</span>
+    </div>
+
+    <div class="settings-group">
+      <p>Status: <span id="status-text">Ready</span></p>
+    </div>
+  </main>
+</body>
+
+</html>
