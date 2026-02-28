@@ -49,6 +49,8 @@ use tauri::{
     tray::TrayIconBuilder,
     Emitter, Manager,
 };
+use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
 
 struct AppState {
@@ -272,6 +274,25 @@ fn toggle_recording(app: tauri::AppHandle, state: tauri::State<'_, AppState>) {
     }
 }
 
+#[tauri::command]
+fn set_launch_on_startup(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = state.settings.lock().unwrap();
+    settings.launch_on_startup = enabled;
+    save_settings(&app, &settings);
+
+    let autostart_manager = app.autolaunch();
+    if enabled {
+        let _ = autostart_manager.enable();
+    } else {
+        let _ = autostart_manager.disable();
+    }
+    Ok(())
+}
+
 fn perform_transcription(
     app: &tauri::AppHandle,
     tx: &mpsc::Sender<String>,
@@ -420,10 +441,15 @@ fn start_dragging(window: tauri::Window) {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[allow(unused_variables, unused_assignments)]
 pub fn run() {
     let (tx, _rx) = mpsc::channel::<Option<String>>();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec![]),
+        ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -577,6 +603,7 @@ pub fn run() {
             delete_model,
             download_model,
             set_device,
+            set_launch_on_startup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

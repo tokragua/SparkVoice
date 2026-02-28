@@ -16,6 +16,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const availableLanguagesSelect = document.getElementById("available-languages-select") as HTMLSelectElement;
   const myLanguagesList = document.getElementById("my-languages-list") as HTMLUListElement;
   const addLanguageBtn = document.getElementById("add-language-btn") as HTMLButtonElement;
+  const launchStartupToggle = document.getElementById("launch-startup-toggle") as HTMLInputElement;
   const statusText = document.getElementById("status-text") as HTMLElement;
 
   const modelList = document.getElementById("model-list") as HTMLElement;
@@ -35,11 +36,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     // Update nav items
     document.querySelectorAll(".nav-item").forEach(item => {
-      item.classList.remove("active", "bg-primary", "text-background-dark", "shadow-[0_0_15px_rgba(13,242,89,0.3)]");
-      item.classList.add("text-[#9cbaa6]");
+      item.classList.remove("active");
     });
-    navItem.classList.add("active", "bg-primary", "text-background-dark", "shadow-[0_0_15px_rgba(13,242,89,0.3)]");
-    navItem.classList.remove("text-[#9cbaa6]");
+    navItem.classList.add("active");
 
     // Show/Hide sections
     sections.forEach(section => {
@@ -69,6 +68,10 @@ window.addEventListener("DOMContentLoaded", async () => {
       const settings: any = await invoke("get_settings");
       const availableModels: any[] = await invoke("get_available_models");
       const downloadedModels: string[] = await invoke("get_downloaded_models");
+
+      if (launchStartupToggle) {
+        launchStartupToggle.checked = settings.launch_on_startup;
+      }
 
       // Populate active language dropdown
       languageSelect.innerHTML = '<option value="auto">✨ Auto Detect</option>';
@@ -154,10 +157,20 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   await refreshUI();
 
+  // Auto-download tiny model if none exist (clean install)
+  const downloadedModels: string[] = await invoke("get_downloaded_models");
+  if (downloadedModels.length === 0) {
+    await invoke("download_model", { model: "tiny" });
+  }
+
   // Event Listeners
   languageSelect.addEventListener("change", async () => {
     await invoke("set_language", { lang: languageSelect.value });
     statusText.innerText = "Language updated";
+  });
+
+  launchStartupToggle.addEventListener("change", async () => {
+    await invoke("set_launch_on_startup", { enabled: launchStartupToggle.checked });
   });
 
   addLanguageBtn.addEventListener("click", async () => {

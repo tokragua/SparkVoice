@@ -13,6 +13,7 @@ pub struct AppSettings {
     pub pill_x: f32,
     pub pill_y: f32,
     pub selected_model: String,
+    pub launch_on_startup: bool,
 }
 
 impl Default for AppSettings {
@@ -25,6 +26,7 @@ impl Default for AppSettings {
             pill_x: 100.0,
             pill_y: 100.0,
             selected_model: "tiny".to_string(),
+            launch_on_startup: false,
         }
     }
 }

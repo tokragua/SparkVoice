@@ -56,9 +56,23 @@
   background: rgba(13, 242, 89, 0.05);
 }
 
+.nav-item {
+  cursor: pointer;
+  color: #9cbaa6;
+}
+
+.nav-item:hover:not(.active) {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+.nav-item:hover:not(.active) span {
+  color: #0df259;
+}
+
 .nav-item.active {
   background-color: #0df259;
-  color: #102216;
+  color: #102216 !important;
   box-shadow: 0 0 15px rgba(13, 242, 89, 0.3);
 }
 

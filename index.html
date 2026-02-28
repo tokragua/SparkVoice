@@ -40,7 +40,7 @@
 <body
   class="bg-background-dark text-slate-100 font-display antialiased h-screen overflow-hidden flex selection:bg-primary selection:text-background-dark">
   <!-- Sidebar -->
-  <aside class="w-80 flex-shrink-0 flex flex-col h-full bg-[#111813] border-r border-[#28392e] relative z-20">
+  <aside class="w-64 flex-shrink-0 flex flex-col h-full bg-[#111813] border-r border-[#28392e] relative z-20">
     <!-- App Header -->
     <div class="p-6 pb-2">
       <div class="flex items-center gap-4 mb-8">
@@ -57,23 +57,28 @@
       </div>
       <!-- Navigation -->
       <nav class="flex flex-col gap-2" id="sidebar-nav">
-        <a class="nav-item active flex items-center gap-3 px-4 py-3 rounded-xl bg-primary text-background-dark shadow-[0_0_15px_rgba(13,242,89,0.3)] transition-all hover:scale-[1.02]"
+        <a class="nav-item active flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:scale-[1.02]"
           href="#" data-section="general">
           <span class="material-symbols-outlined text-[24px]">settings</span>
           <span class="text-base font-bold">General</span>
         </a>
-        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] hover:bg-[#1a261e] hover:text-white transition-all group"
-          href="#" data-section="speech">
+        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] transition-all group" href="#"
+          data-section="speech">
           <span class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">language</span>
           <span class="text-sm font-medium">Language & Speech</span>
         </a>
-        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] hover:bg-[#1a261e] hover:text-white transition-all group"
-          href="#" data-section="device">
+        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] transition-all group" href="#"
+          data-section="models">
+          <span class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">database</span>
+          <span class="text-sm font-medium">Model Management</span>
+        </a>
+        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] transition-all group" href="#"
+          data-section="device">
           <span class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">mic</span>
           <span class="text-sm font-medium">Input Device</span>
         </a>
-        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] hover:bg-[#1a261e] hover:text-white transition-all group"
-          href="#" data-section="hotkeys">
+        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] transition-all group" href="#"
+          data-section="hotkeys">
           <span class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">keyboard</span>
           <span class="text-sm font-medium">Hotkeys</span>
         </a>
@@ -118,29 +123,9 @@
               </div>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" class="sr-only peer" checked disabled>
+              <input type="checkbox" id="launch-startup-toggle" class="sr-only peer">
               <div
-                class="w-14 h-7 bg-[#28392e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-[0_0_10px_rgba(13,242,89,0.5)] opacity-50">
-              </div>
-            </label>
-          </div>
-
-          <div
-            class="glass-panel rounded-2xl p-5 flex items-center justify-between group hover:border-primary/30 transition-all duration-300">
-            <div class="flex items-center gap-5">
-              <div
-                class="flex items-center justify-center rounded-xl bg-[#28392e] text-white shrink-0 size-12 shadow-inner shadow-black/20 group-hover:text-primary transition-colors">
-                <span class="material-symbols-outlined">minimize</span>
-              </div>
-              <div class="flex flex-col">
-                <p class="text-white text-lg font-semibold">Minimize to System Tray</p>
-                <p class="text-[#9cbaa6] text-sm">Keep the application running when closed.</p>
-              </div>
-            </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" class="sr-only peer" checked disabled>
-              <div
-                class="w-14 h-7 bg-[#28392e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-[0_0_10px_rgba(13,242,89,0.5)] opacity-50">
+                class="w-14 h-7 bg-[#28392e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-[0_0_10px_rgba(13,242,89,0.5)]">
               </div>
             </label>
           </div>
@@ -157,10 +142,10 @@
             <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">Active Language</h3>
             <div class="relative">
               <select id="language-select"
-                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
+                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl pl-4 pr-16 py-3 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
                 <!-- Populated by JS -->
               </select>
-              <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-primary">
+              <div class="absolute right-10 top-1/2 -translate-y-1/2 pointer-events-none text-primary">
                 <span class="material-symbols-outlined">language</span>
               </div>
             </div>
@@ -184,11 +169,20 @@
             </div>
           </div>
 
+        </section>
+
+        <!-- Section: Models -->
+        <section id="section-models" class="content-section hidden flex flex-col gap-4">
+          <div class="flex flex-col gap-2 mb-4">
+            <h2 class="text-4xl font-bold text-white tracking-tight">Model Management</h2>
+            <p class="text-[#9cbaa6] text-lg font-light">Manage your languages and transcription models.</p>
+          </div>
+
           <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
-            <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">Model Management</h3>
+            <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">Available Models</h3>
             <p class="text-[#9cbaa6] text-sm">Higher accuracy models are larger and slower.</p>
             <div id="model-status" class="text-primary text-xs font-medium h-4"></div>
-            <div id="model-list" class="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-2">
+            <div id="model-list" class="flex flex-col gap-3">
               <!-- Populated by JS -->
             </div>
           </div>
@@ -205,10 +199,10 @@
             <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">Microphone</h3>
             <div class="relative">
               <select id="audio-input-select"
-                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
+                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl pl-4 pr-16 py-3 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
                 <option value="">Default System Microphone</option>
               </select>
-              <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-primary">
+              <div class="absolute right-10 top-1/2 -translate-y-1/2 pointer-events-none text-primary">
                 <span class="material-symbols-outlined">mic</span>
               </div>
             </div>
@@ -218,11 +212,11 @@
             <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-2">Computing Device</h3>
             <div class="relative">
               <select id="device-select"
-                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
+                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl pl-4 pr-16 py-3 appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
                 <option value="cuda">CUDA GPU</option>
                 <option value="cpu">CPU</option>
               </select>
-              <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-primary">
+              <div class="absolute right-10 top-1/2 -translate-y-1/2 pointer-events-none text-primary">
                 <span class="material-symbols-outlined">memory</span>
               </div>
             </div>
