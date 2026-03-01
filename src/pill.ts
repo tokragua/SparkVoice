@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 
 const pillContainer = document.getElementById("pill-container") as HTMLElement;
 const micToggle = document.getElementById("mic-toggle") as HTMLElement;
@@ -160,18 +161,24 @@ compactToggle?.addEventListener("click", (e: Event) => {
 
 function applyCompactState(compact: boolean) {
     isCompact = compact;
+    const win = getCurrentWindow();
+
     if (isCompact) {
         pillContainer.classList.add("compact");
         if (compactToggle) { // Check if compactToggle exists before accessing its properties
             compactToggle.innerText = "chevron_right";
             compactToggle.title = "Expand Pill";
         }
+        // Container is 160x30 + 10px padding * 2 = 180x50
+        win.setSize(new LogicalSize(180, 50)).catch(console.error);
     } else {
         pillContainer.classList.remove("compact");
         if (compactToggle) { // Check if compactToggle exists before accessing its properties
             compactToggle.innerText = "chevron_left";
             compactToggle.title = "Toggle Compact Mode";
         }
+        // Container is 240x50 + 10px padding * 2 = 260x70
+        win.setSize(new LogicalSize(260, 70)).catch(console.error);
     }
     // Canvas dimensions changed - call multiple times during and after the 300ms CSS transition
     setTimeout(resizeCanvas, 50);

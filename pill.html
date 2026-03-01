@@ -16,8 +16,9 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
       width: 100vw;
+      height: 100vh;
+      box-sizing: border-box;
     }
 
     .pill-container {
@@ -133,7 +134,7 @@
     }
 
     .pill-container.compact {
-      width: 125px;
+      width: 160px;
       height: 30px;
       border-radius: 15px;
     }
@@ -142,7 +143,6 @@
       height: 20px;
     }
 
-    .pill-container.compact #mic-toggle,
     .pill-container.compact #copy-btn,
     .pill-container.compact #settings-btn,
     .pill-container.compact .pill-actions border-left {
