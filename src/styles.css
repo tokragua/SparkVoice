@@ -1,5 +1,44 @@
+/* Tailwind CSS v4 — CSS-first configuration */
+@import "tailwindcss";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/noto-sans";
+@import "@fontsource-variable/material-symbols-outlined/full.css";
+
+/* Material Symbols class — replaces Google Fonts injected styles */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined Variable', sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'liga';
+}
+
+/* Dark mode variant */
+@variant dark (&:where(.dark, .dark *));
+
+/* Custom theme tokens */
+@theme {
+  --color-primary: #0df259;
+  --color-background-light: #f5f8f6;
+  --color-background-dark: #102216;
+  --color-surface-dark: #1a261e;
+  --color-surface-light: #ffffff;
+  --font-display: "Space Grotesk Variable", sans-serif;
+  --font-body: "Noto Sans Variable", sans-serif;
+}
+
 :root {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Noto Sans Variable', sans-serif;
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;

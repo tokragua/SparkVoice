@@ -4,6 +4,7 @@ mod whisper;
 use crate::settings::{load_settings, save_settings, AppSettings};
 use crate::whisper::{capture_audio, list_input_devices, transcribe, WhisperState};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use whisper_rs::WhisperContext;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -13,36 +14,64 @@ pub struct ModelMetadata {
     pub description: String,
 }
 
-const AVAILABLE_MODELS: &[(&str, &str, &str)] = &[
-    ("tiny", "75 MiB", "Fastest, least accurate, multi-language"),
-    ("tiny.en", "75 MiB", "Fastest, least accurate, English only"),
-    (
-        "base",
-        "142 MiB",
-        "Fast, reasonably accurate, multi-language",
-    ),
-    (
-        "base.en",
-        "142 MiB",
-        "Fast, reasonably accurate, English only",
-    ),
-    ("small", "466 MiB", "Good balance, multi-language"),
-    ("small.en", "466 MiB", "Good balance, English only"),
-    ("small.en-tdrz", "465 MiB", "Small English with Tinydrz"),
-    ("medium", "1.5 GiB", "High accuracy, multi-language"),
-    ("medium.en", "1.5 GiB", "High accuracy, English only"),
-    ("large-v1", "2.9 GiB", "Very high accuracy, multi-language"),
-    (
-        "large-v2",
-        "2.9 GiB",
-        "Very high accuracy, multi-language (v2)",
-    ),
-    ("large-v2-q5_0", "1.1 GiB", "Quantized large-v2"),
-    ("large-v3", "2.9 GiB", "State of the art, multi-language"),
-    ("large-v3-q5_0", "1.1 GiB", "Quantized large-v3"),
-    ("large-v3-turbo", "1.5 GiB", "Fast large-v3, multi-language"),
-    ("large-v3-turbo-q5_0", "547 MiB", "Quantized large-v3-turbo"),
+/// (name, size_display, description, sha256_hash)
+/// Hashes from: https://huggingface.co/ggerganov/whisper.cpp/tree/main
+const AVAILABLE_MODELS: &[(&str, &str, &str, &str)] = &[
+    ("tiny", "75 MiB", "Fastest, least accurate, multi-language", "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"),
+    ("tiny.en", "75 MiB", "Fastest, least accurate, English only", "921e4cf8686fdd993dcd081a5da5b6c05c9cfe3703e1fa2307d80f1a0036f5e3"),
+    ("base", "142 MiB", "Fast, reasonably accurate, multi-language", "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b7b49f01e0c7e00e87"),
+    ("base.en", "142 MiB", "Fast, reasonably accurate, English only", "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c034dc"),
+    ("small", "466 MiB", "Good balance, multi-language", "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"),
+    ("small.en", "466 MiB", "Good balance, English only", "f953ad57fd29e51574c9c4200d994dc73e3dedb4e12af713e945a2b2f1c75f9d"),
+    ("small.en-tdrz", "465 MiB", "Small English with Tinydrz", "b17e33fec0b3e9e143fe56bfbc44e4bfbb55e59a3bfb30e773c59c4e9b178e13"),
+    ("medium", "1.5 GiB", "High accuracy, multi-language", "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208"),
+    ("medium.en", "1.5 GiB", "High accuracy, English only", "6c6d22e90f8c8a1bfda6e55f004e9b20437cd0e3f71db0e45e9c3ee2e5c1c276"),
+    ("large-v1", "2.9 GiB", "Very high accuracy, multi-language", "b1caaf735c4c1429d6f846e36ceef03f5a3d65f43163c2c5b3cdd5ac94218d5f"),
+    ("large-v2", "2.9 GiB", "Very high accuracy, multi-language (v2)", "0f4c8e34f21cf1a914c59d8cfe9a2559c2df76e8fa1a5e25e4c9dbfc5aaab3ae"),
+    ("large-v2-q5_0", "1.1 GiB", "Quantized large-v2", "00e39f2196344e901b3a2bd5814807a769bd1630100633916aff029af0e2e1df"),
+    ("large-v3", "2.9 GiB", "State of the art, multi-language", "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e5"),
+    ("large-v3-q5_0", "1.1 GiB", "Quantized large-v3", "e6e2ed78495d403bef4b7cff42ef4aaadcfea8de3b0a3c08e25b0f35e02e2b57"),
+    ("large-v3-turbo", "1.5 GiB", "Fast large-v3, multi-language", "4d0cf661596e04e5e07470e4a68b0e77d4a2ab824ff8cf72eae8fac9cc25c5c8"),
+    ("large-v3-turbo-q5_0", "547 MiB", "Quantized large-v3-turbo", "e050f03cda45a4e7090a81070b28e65a0e392c63b2a2c7e548ca62cc7033d46b"),
 ];
+
+/// Validates that a model name is safe (no path traversal, only allowed characters)
+fn validate_model_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Model name cannot be empty".to_string());
+    }
+    if name.contains('/') || name.contains('\\') || name.contains("..") {
+        return Err("Invalid model name: contains path separators".to_string());
+    }
+    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.') {
+        return Err("Invalid model name: contains disallowed characters".to_string());
+    }
+    // Must be a known model
+    if !AVAILABLE_MODELS.iter().any(|(n, _, _, _)| *n == name) {
+        return Err(format!("Unknown model: {}", name));
+    }
+    Ok(())
+}
+
+/// Get the expected SHA256 hash for a model
+fn get_model_hash(name: &str) -> Option<&'static str> {
+    AVAILABLE_MODELS.iter().find(|(n, _, _, _)| *n == name).map(|(_, _, _, h)| *h)
+}
+
+/// Get the display size for a model
+fn get_model_size_display(name: &str) -> &str {
+    AVAILABLE_MODELS.iter().find(|(n, _, _, _)| *n == name).map(|(_, s, _, _)| *s).unwrap_or("unknown size")
+}
+
+/// Verify a file's SHA256 hash matches the expected value
+fn verify_file_hash(path: &std::path::Path, expected_hash: &str) -> Result<bool, String> {
+    let mut file = std::fs::File::open(path).map_err(|e| format!("Failed to open file for verification: {}", e))?;
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher).map_err(|e| format!("Failed to read file for hash: {}", e))?;
+    let result = hasher.finalize();
+    let hash_hex = format!("{:x}", result);
+    Ok(hash_hex == expected_hash)
+}
 use enigo::{Enigo, Keyboard, Settings};
 use log::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -286,6 +315,15 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
             );
         }
 
+        // Validate model name to prevent path traversal
+        if let Err(e) = validate_model_name(&model_name) {
+            error!("Invalid model name: {}", e);
+            let _ = app_handle.emit("status-update", format!("Invalid model: {}", e));
+            *state.is_transcribing.lock().unwrap() = false;
+            let _ = app_handle.emit("transcribing-toggled", false);
+            return;
+        }
+
         let model_filename = format!("ggml-{}.bin", model_name);
         let model_dir = app_handle.path().app_data_dir().unwrap_or_default();
         if !model_dir.exists() {
@@ -296,13 +334,14 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
 
         if !model_path.exists() && !dev_path.exists() {
             // Try to download it if truly missing
+            let size_display = get_model_size_display(&model_name);
             info!(
                 "Required model {} missing. Attempting download...",
                 model_filename
             );
             let _ = app_handle.emit(
                 "status-update",
-                format!("Downloading {} model (75MB)...", model_name),
+                format!("Downloading {} model ({})...", model_name, size_display),
             );
 
             let url = format!(
@@ -314,17 +353,36 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
                     match std::fs::File::create(&model_path) {
                         Ok(mut f) => {
                             if let Ok(_) = std::io::copy(&mut response, &mut f) {
-                                info!("Download complete: {:?}", model_path);
-                                let _ = app_handle
-                                    .emit("status-update", format!("{} model ready.", model_name));
+                                // Verify hash integrity
+                                if let Some(expected_hash) = get_model_hash(&model_name) {
+                                    match verify_file_hash(&model_path, expected_hash) {
+                                        Ok(true) => {
+                                            info!("Download complete and verified: {:?}", model_path);
+                                            let _ = app_handle.emit("status-update", format!("{} model ready.", model_name));
+                                        }
+                                        Ok(false) => {
+                                            error!("Hash mismatch for model {}! File may be corrupted or tampered with.", model_name);
+                                            let _ = std::fs::remove_file(&model_path);
+                                            let _ = app_handle.emit("status-update", "Download failed: integrity check failed.");
+                                        }
+                                        Err(e) => {
+                                            error!("Hash verification error: {}", e);
+                                            let _ = std::fs::remove_file(&model_path);
+                                            let _ = app_handle.emit("status-update", "Download failed: verification error.");
+                                        }
+                                    }
+                                } else {
+                                    info!("Download complete (no hash available): {:?}", model_path);
+                                    let _ = app_handle.emit("status-update", format!("{} model ready.", model_name));
+                                }
                             } else {
                                 error!("Failed to write model file at {:?}", model_path);
+                                let _ = std::fs::remove_file(&model_path); // Clean up partial download
                             }
                         }
                         Err(e) => {
                             error!("Failed to create model file at {:?}: {}", model_path, e);
-                            let _ =
-                                app_handle.emit("status-update", "Failed to create model file.");
+                            let _ = app_handle.emit("status-update", "Failed to create model file.");
                         }
                     }
                 }
@@ -461,7 +519,7 @@ fn perform_transcription(
 fn get_available_models() -> Vec<ModelMetadata> {
     AVAILABLE_MODELS
         .iter()
-        .map(|(name, size, desc)| ModelMetadata {
+        .map(|(name, size, desc, _hash)| ModelMetadata {
             name: name.to_string(),
             size: size.to_string(),
             description: desc.to_string(),
@@ -498,6 +556,7 @@ fn select_model(
     state: tauri::State<'_, AppState>,
     model: String,
 ) -> Result<(), String> {
+    validate_model_name(&model)?;
     let mut settings = state.settings.lock().unwrap();
     settings.selected_model = model;
     save_settings(&app, &settings);
@@ -506,6 +565,7 @@ fn select_model(
 
 #[tauri::command]
 fn delete_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
+    validate_model_name(&model)?;
     let model_filename = format!("ggml-{}.bin", model);
     let model_path = app
         .path()
@@ -524,6 +584,7 @@ fn delete_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
 // download_model is already partly implemented in the spawn loop logic but we should move it to a standalone command
 #[tauri::command]
 fn download_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
+    validate_model_name(&model)?;
     let app_clone = app.clone();
     std::thread::spawn(move || {
         let model_filename = format!("ggml-{}.bin", model);
@@ -536,8 +597,9 @@ fn download_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
         }
         let model_path = model_dir.join(&model_filename);
 
-        info!("Downloading model {}...", model);
-        let _ = app_clone.emit("model-download-status", format!("Downloading {}...", model));
+        let size_display = get_model_size_display(&model);
+        info!("Downloading model {} ({})...", model, size_display);
+        let _ = app_clone.emit("model-download-status", format!("Downloading {} ({})...", model, size_display));
 
         let url = format!(
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin",
@@ -547,11 +609,31 @@ fn download_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
             Ok(mut response) if response.status().is_success() => {
                 if let Ok(mut f) = std::fs::File::create(&model_path) {
                     if let Ok(_) = std::io::copy(&mut response, &mut f) {
-                        info!("Download complete: {:?}", model_path);
-                        let _ = app_clone.emit("model-download-status", "ready".to_string());
+                        // Verify hash integrity
+                        if let Some(expected_hash) = get_model_hash(&model) {
+                            match verify_file_hash(&model_path, expected_hash) {
+                                Ok(true) => {
+                                    info!("Download complete and verified: {:?}", model_path);
+                                    let _ = app_clone.emit("model-download-status", "ready".to_string());
+                                }
+                                Ok(false) => {
+                                    error!("Hash mismatch for downloaded model {}!", model);
+                                    let _ = std::fs::remove_file(&model_path);
+                                    let _ = app_clone.emit("model-download-status", "error: integrity check failed".to_string());
+                                }
+                                Err(e) => {
+                                    error!("Hash verification error: {}", e);
+                                    let _ = std::fs::remove_file(&model_path);
+                                    let _ = app_clone.emit("model-download-status", "error: verification failed".to_string());
+                                }
+                            }
+                        } else {
+                            info!("Download complete (no hash): {:?}", model_path);
+                            let _ = app_clone.emit("model-download-status", "ready".to_string());
+                        }
                     } else {
-                        let _ = app_clone
-                            .emit("model-download-status", "error: write failed".to_string());
+                        let _ = std::fs::remove_file(&model_path); // Clean up partial
+                        let _ = app_clone.emit("model-download-status", "error: write failed".to_string());
                     }
                 }
             }

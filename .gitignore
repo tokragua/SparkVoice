@@ -26,6 +26,9 @@ dist-ssr
 SettingsDesignV1/*
 src-tauri/full_build_log.txt
 src-tauri/build_log_devices.txt
+src-tauri/*.bin
+src-tauri/error.log
+sparkvoice_audit.md.resolved
 
 
 

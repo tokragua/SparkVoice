@@ -106,14 +106,33 @@ window.addEventListener("DOMContentLoaded", async () => {
       settings.languages.forEach((lang: string) => {
         const li = document.createElement("li");
         li.className = "language-item";
-        li.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <span class="material-symbols-outlined text-primary text-sm">check_circle</span>
-                        <span class="text-white font-medium">${LANGUAGE_NAMES[lang] || lang}</span>
-                        <span class="text-[#9cbaa6] text-xs uppercase font-bold tracking-widest">${lang}</span>
-                    </div>
-                    <span class="material-symbols-outlined remove-btn text-[20px]" data-lang="${lang}">close</span>
-                `;
+
+        const leftDiv = document.createElement("div");
+        leftDiv.className = "flex items-center gap-3";
+
+        const checkIcon = document.createElement("span");
+        checkIcon.className = "material-symbols-outlined text-primary text-sm";
+        checkIcon.textContent = "check_circle";
+        leftDiv.appendChild(checkIcon);
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "text-white font-medium";
+        nameSpan.textContent = LANGUAGE_NAMES[lang] || lang;
+        leftDiv.appendChild(nameSpan);
+
+        const codeSpan = document.createElement("span");
+        codeSpan.className = "text-[#9cbaa6] text-xs uppercase font-bold tracking-widest";
+        codeSpan.textContent = lang;
+        leftDiv.appendChild(codeSpan);
+
+        li.appendChild(leftDiv);
+
+        const removeBtn = document.createElement("span");
+        removeBtn.className = "material-symbols-outlined remove-btn text-[20px]";
+        removeBtn.dataset.lang = lang;
+        removeBtn.textContent = "close";
+        li.appendChild(removeBtn);
+
         myLanguagesList.appendChild(li);
       });
 
@@ -125,25 +144,71 @@ window.addEventListener("DOMContentLoaded", async () => {
 
         const modelDiv = document.createElement("div");
         modelDiv.className = `glass-panel rounded-2xl p-4 flex items-center justify-between group hover:border-primary/30 transition-all duration-300 model-item ${isSelected ? "selected" : ""}`;
-        modelDiv.innerHTML = `
-          <div class="flex items-center gap-4">
-            <div class="flex items-center justify-center rounded-xl bg-[#28392e] ${isSelected ? 'text-primary' : 'text-white'} shrink-0 size-10 shadow-inner">
-               <span class="material-symbols-outlined text-[20px]">description</span>
-            </div>
-            <div class="flex flex-col">
-              <div class="flex items-center gap-2">
-                <p class="text-white font-semibold group-hover:text-primary transition-colors">${model.name}</p>
-                ${isSelected ? '<span class="status-pill">Active</span>' : ""}
-              </div>
-              <p class="text-[#9cbaa6] text-xs">${model.size} • ${model.description}</p>
-            </div>
-          </div>
-          <div class="flex gap-2">
-            ${!isDownloaded ? `<button class="download-btn px-4 py-1.5 rounded-lg bg-primary text-background-dark text-xs font-bold hover:scale-[1.05] transition-all" data-model="${model.name}">Download</button>` : ""}
-            ${isDownloaded && !isSelected ? `<button class="use-btn px-4 py-1.5 rounded-lg border border-primary/30 text-primary text-xs font-bold hover:bg-primary/10 transition-all" data-model="${model.name}">Select</button>` : ""}
-            ${isDownloaded ? `<button class="delete-btn px-4 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs font-bold hover:bg-red-500/10 transition-all" data-model="${model.name}">Delete</button>` : ""}
-          </div>
-        `;
+
+        // Left: icon + info
+        const leftDiv = document.createElement("div");
+        leftDiv.className = "flex items-center gap-4";
+
+        const iconWrapper = document.createElement("div");
+        iconWrapper.className = `flex items-center justify-center rounded-xl bg-[#28392e] ${isSelected ? 'text-primary' : 'text-white'} shrink-0 size-10 shadow-inner`;
+        const icon = document.createElement("span");
+        icon.className = "material-symbols-outlined text-[20px]";
+        icon.textContent = "description";
+        iconWrapper.appendChild(icon);
+        leftDiv.appendChild(iconWrapper);
+
+        const infoDiv = document.createElement("div");
+        infoDiv.className = "flex flex-col";
+
+        const nameRow = document.createElement("div");
+        nameRow.className = "flex items-center gap-2";
+        const nameP = document.createElement("p");
+        nameP.className = "text-white font-semibold group-hover:text-primary transition-colors";
+        nameP.textContent = model.name;
+        nameRow.appendChild(nameP);
+        if (isSelected) {
+          const pill = document.createElement("span");
+          pill.className = "status-pill";
+          pill.textContent = "Active";
+          nameRow.appendChild(pill);
+        }
+        infoDiv.appendChild(nameRow);
+
+        const descP = document.createElement("p");
+        descP.className = "text-[#9cbaa6] text-xs";
+        descP.textContent = `${model.size} • ${model.description}`;
+        infoDiv.appendChild(descP);
+
+        leftDiv.appendChild(infoDiv);
+        modelDiv.appendChild(leftDiv);
+
+        // Right: action buttons
+        const btnDiv = document.createElement("div");
+        btnDiv.className = "flex gap-2";
+
+        if (!isDownloaded) {
+          const dlBtn = document.createElement("button");
+          dlBtn.className = "download-btn px-4 py-1.5 rounded-lg bg-primary text-background-dark text-xs font-bold hover:scale-[1.05] transition-all";
+          dlBtn.dataset.model = model.name;
+          dlBtn.textContent = "Download";
+          btnDiv.appendChild(dlBtn);
+        }
+        if (isDownloaded && !isSelected) {
+          const useBtn = document.createElement("button");
+          useBtn.className = "use-btn px-4 py-1.5 rounded-lg border border-primary/30 text-primary text-xs font-bold hover:bg-primary/10 transition-all";
+          useBtn.dataset.model = model.name;
+          useBtn.textContent = "Select";
+          btnDiv.appendChild(useBtn);
+        }
+        if (isDownloaded) {
+          const delBtn = document.createElement("button");
+          delBtn.className = "delete-btn px-4 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs font-bold hover:bg-red-500/10 transition-all";
+          delBtn.dataset.model = model.name;
+          delBtn.textContent = "Delete";
+          btnDiv.appendChild(delBtn);
+        }
+
+        modelDiv.appendChild(btnDiv);
         modelList.appendChild(modelDiv);
       });
 
