@@ -145,6 +145,18 @@ fn set_language(
 }
 
 #[tauri::command]
+fn set_pill_collapsed(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    collapsed: bool,
+) -> Result<(), String> {
+    let mut settings = state.settings.lock().unwrap();
+    settings.pill_collapsed = collapsed;
+    save_settings(&app, &settings);
+    Ok(())
+}
+
+#[tauri::command]
 fn add_language(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
@@ -832,6 +844,7 @@ pub fn run() {
             is_cuda_supported,
             cancel_transcription,
             open_settings,
+            set_pill_collapsed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

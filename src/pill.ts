@@ -13,6 +13,7 @@ let currentAmplitude = 0;
 let smoothedAmplitude = 0;
 let sweepPos = 0;
 let sweepDirection = 1;
+let isCompact = false;
 
 function resizeCanvas() {
     canvas.width = canvas.clientWidth * window.devicePixelRatio;
@@ -146,6 +147,42 @@ copyBtn?.addEventListener("click", (e: Event) => {
                 copyBtn.style.color = "";
             }, 2000);
         });
+    }
+});
+
+const compactToggle = document.getElementById("compact-toggle") as HTMLElement | null;
+compactToggle?.addEventListener("click", (e: Event) => {
+    e.stopPropagation();
+    isCompact = !isCompact;
+    applyCompactState(isCompact);
+    invoke("set_pill_collapsed", { collapsed: isCompact });
+});
+
+function applyCompactState(compact: boolean) {
+    isCompact = compact;
+    if (isCompact) {
+        pillContainer.classList.add("compact");
+        if (compactToggle) { // Check if compactToggle exists before accessing its properties
+            compactToggle.innerText = "chevron_right";
+            compactToggle.title = "Expand Pill";
+        }
+    } else {
+        pillContainer.classList.remove("compact");
+        if (compactToggle) { // Check if compactToggle exists before accessing its properties
+            compactToggle.innerText = "chevron_left";
+            compactToggle.title = "Toggle Compact Mode";
+        }
+    }
+    // Canvas dimensions changed - call multiple times during and after the 300ms CSS transition
+    setTimeout(resizeCanvas, 50);
+    setTimeout(resizeCanvas, 150);
+    setTimeout(resizeCanvas, 310);
+}
+
+// Load initial state
+invoke("get_settings").then((settings: any) => {
+    if (settings.pill_collapsed) {
+        applyCompactState(true);
     }
 });
 

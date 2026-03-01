@@ -127,6 +127,31 @@
       margin-left: 8px;
       border-left: 1px solid rgba(255, 255, 255, 0.1);
       padding-left: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .pill-container.compact {
+      width: 125px;
+      height: 30px;
+      border-radius: 15px;
+    }
+
+    .pill-container.compact .waveform-container {
+      height: 20px;
+    }
+
+    .pill-container.compact #mic-toggle,
+    .pill-container.compact #copy-btn,
+    .pill-container.compact #settings-btn,
+    .pill-container.compact .pill-actions border-left {
+      display: none;
+    }
+
+    /* Hide divider in compact mode */
+    .pill-container.compact .pill-actions {
+      border-left: none;
+      margin-left: 0;
+      padding-left: 0;
     }
 
     .action-btn {
@@ -138,7 +163,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 4px;
+      padding: 0;
       border-radius: 50%;
     }
 
@@ -146,6 +171,19 @@
       color: #fff;
       background: rgba(255, 255, 255, 0.1);
       transform: rotate(30deg);
+    }
+
+    #compact-toggle {
+      font-size: 12px !important;
+      opacity: 0.3;
+      padding: 0;
+      margin-left: 2px;
+    }
+
+    #compact-toggle:hover {
+      opacity: 1;
+      transform: none;
+      /* Don't rotate the toggle */
     }
 
     @keyframes pulse {
@@ -184,6 +222,8 @@
     <div class="pill-actions">
       <div class="action-btn material-symbols-outlined" id="copy-btn" title="Copy Last Text">content_copy</div>
       <div class="action-btn material-symbols-outlined" id="settings-btn" title="Settings">settings</div>
+      <div class="action-btn material-symbols-outlined" id="compact-toggle" title="Toggle Compact Mode">chevron_left
+      </div>
     </div>
   </div>
   <script type="module" src="/src/pill.ts"></script>

@@ -16,6 +16,7 @@ pub struct AppSettings {
     pub launch_on_startup: bool,
     pub recording_shortcut: String,
     pub max_recording_seconds: u32,
+    pub pill_collapsed: bool,
 }
 
 impl Default for AppSettings {
@@ -31,6 +32,7 @@ impl Default for AppSettings {
             launch_on_startup: false,
             recording_shortcut: "F2".to_string(),
             max_recording_seconds: 180,
+            pill_collapsed: false,
         }
     }
 }
