@@ -1,6 +1,6 @@
 [package]
 name = "sparkvoice"
-version = "0.1.2"
+version = "0.1.3"
 description = "Voice to text application. Enhances productivity with AI agents and assistance. Runs local for total privacy."
 authors = ["Adrian Spark"]
 edition = "2021"
