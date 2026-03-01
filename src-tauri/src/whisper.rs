@@ -146,11 +146,14 @@ fn process_audio(
     }
 }
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 pub fn transcribe(
     ctx: &WhisperContext,
     audio_data: &[f32],
     lang: &str,
     allowed_langs: &[String],
+    is_cancelled: Arc<AtomicBool>,
 ) -> Result<String> {
     let mut state = ctx.create_state()?;
 
@@ -173,10 +176,26 @@ pub fn transcribe(
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
 
+    // C-style abort callback for safer, stable cancellation without UB
+    unsafe {
+        params.set_abort_callback(Some(abort_callback));
+        params.set_abort_callback_user_data(Arc::as_ptr(&is_cancelled) as *mut std::ffi::c_void);
+    }
+
     info!("Processing transcription with {} CPU threads...", threads);
     let start = std::time::Instant::now();
-    state.full(params, audio_data)?;
+
+    // Explicitly handle results to check for cancellation before returning engine errors
+    if let Err(e) = state.full(params, audio_data) {
+        if is_cancelled.load(Ordering::SeqCst) {
+            warn!("Transcription aborted by user flag.");
+            return Err(anyhow::anyhow!("Transcription cancelled by user."));
+        }
+        return Err(e.into());
+    }
+
     let duration = start.elapsed();
+
     info!(
         "Transcription compute finished in {:.2}s",
         duration.as_secs_f32()
@@ -206,7 +225,22 @@ pub fn transcribe(
                     retry_params.set_print_realtime(false);
                     retry_params.set_print_timestamps(false);
 
-                    state.full(retry_params, audio_data)?;
+                    // Add cancellation callback to retry too
+                    unsafe {
+                        retry_params.set_abort_callback(Some(abort_callback));
+                        retry_params.set_abort_callback_user_data(
+                            Arc::as_ptr(&is_cancelled) as *mut std::ffi::c_void
+                        );
+                    }
+
+                    // Explicitly handle results to check for cancellation before returning engine errors
+                    if let Err(e) = state.full(retry_params, audio_data) {
+                        if is_cancelled.load(Ordering::SeqCst) {
+                            warn!("Transcription retry aborted by user flag.");
+                            return Err(anyhow::anyhow!("Transcription cancelled by user."));
+                        }
+                        return Err(e.into());
+                    }
                 }
             }
         }
@@ -221,4 +255,9 @@ pub fn transcribe(
     }
 
     Ok(result)
+}
+
+extern "C" fn abort_callback(user_data: *mut std::ffi::c_void) -> bool {
+    let is_cancelled = unsafe { &*(user_data as *const AtomicBool) };
+    is_cancelled.load(Ordering::SeqCst)
 }

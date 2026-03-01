@@ -5,6 +5,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SparkVoice Pill</title>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
   <style>
     body {
       margin: 0;
@@ -71,18 +73,52 @@
       height: 100%;
     }
 
+    .status-container {
+      width: 12px;
+      height: 12px;
+      margin-left: 12px;
+      position: relative;
+      cursor: default;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     .status-dot {
       width: 8px;
       height: 8px;
-      border-radius: 50%;
       background-color: #444;
-      transition: background-color 0.3s ease;
+      border-radius: 50%;
+      transition: all 0.3s ease;
     }
 
-    .recording .status-dot {
-      background-color: #00ff88;
-      box-shadow: 0 0 8px #00ff88;
+    .pill-container.recording .status-dot {
+      background-color: #ff4444;
+      box-shadow: 0 0 8px rgba(255, 68, 68, 0.5);
       animation: pulse 1.5s infinite;
+    }
+
+    .cancel-icon {
+      position: absolute;
+      font-size: 16px;
+      color: #fff;
+      display: none;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.2s ease, color 0.2s ease;
+    }
+
+    .cancel-icon:hover {
+      color: #ff4444;
+      transform: scale(1.2);
+    }
+
+    .pill-container.transcribing .status-dot {
+      display: none;
+    }
+
+    .pill-container.transcribing .cancel-icon {
+      display: block;
     }
 
     @keyframes pulse {
@@ -114,7 +150,10 @@
     <div class="waveform-container" data-tauri-drag-region>
       <canvas id="waveform"></canvas>
     </div>
-    <div class="status-dot"></div>
+    <div class="status-container" id="status-container">
+      <div class="status-dot"></div>
+      <div class="cancel-icon material-symbols-outlined">close</div>
+    </div>
   </div>
   <script type="module" src="/src/pill.ts"></script>
 </body>

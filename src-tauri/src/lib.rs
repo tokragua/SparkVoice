@@ -45,6 +45,7 @@ const AVAILABLE_MODELS: &[(&str, &str, &str)] = &[
 ];
 use enigo::{Enigo, Keyboard, Settings};
 use log::{error, info, warn};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use tauri::{
     menu::{Menu, MenuItem},
@@ -222,17 +223,22 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
         return;
     }
     *transcribing = true;
+    state.is_cancelled.store(false, Ordering::SeqCst);
     drop(transcribing);
+
+    // Notify pill UI that processing started
+    let _ = app.emit("transcribing-toggled", true);
 
     let mut ws = state.whisper_state.lock().unwrap();
     let audio_data = ws.audio_buffer.clone();
     ws.audio_buffer.clear();
-    ws.is_recording = false; // Ensure it's off
+    ws.is_recording = false;
     drop(ws);
 
     let tx = state.typer_tx.clone();
     let settings = state.settings.lock().unwrap().clone();
-    let app_handle = app.clone(); // Clone app handle for the spawned thread
+    let app_handle = app.clone();
+    let is_cancelled = state.is_cancelled.clone();
 
     std::thread::spawn(move || {
         let state = app_handle.state::<AppState>();
@@ -250,7 +256,7 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
         if (settings.selected_language != "en" && settings.selected_language != "auto")
             && model_name.ends_with(".en")
         {
-            let _ = app.emit(
+            let _ = app_handle.emit(
                 "status-update",
                 format!(
                     "Warning: {} is English-only. Transcription may fail.",
@@ -259,7 +265,7 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
             );
         }
         if settings.selected_language == "auto" && model_name.ends_with(".en") {
-            let _ = app.emit(
+            let _ = app_handle.emit(
                 "status-update",
                 format!(
                     "Warning: Auto-detect requires a multilingual model. {} is English-only.",
@@ -269,75 +275,20 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
         }
 
         let model_filename = format!("ggml-{}.bin", model_name);
-
-        // Resolve model path in App Data directory for reliability
-        let model_dir = app
-            .path()
-            .app_data_dir()
-            .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let model_dir = app_handle.path().app_data_dir().unwrap_or_default();
         if !model_dir.exists() {
             let _ = std::fs::create_dir_all(&model_dir);
         }
         let model_path = model_dir.join(&model_filename);
+        let dev_path = std::path::PathBuf::from("src-tauri").join(&model_filename);
 
-        if !model_path.exists() {
-            // If not in App Data, check current/src-tauri for dev compatibility
-            let dev_path = std::path::PathBuf::from("src-tauri").join(&model_filename);
-            if dev_path.exists() {
-                // Just use the dev path if it exists
-                // Check cache or initialize for dev_path
-                let mut cache = state.model_cache.lock().unwrap();
-                let context: Option<Arc<WhisperContext>> =
-                    if let Some((cached_name, cached_gpu, ctx)) = &*cache {
-                        if cached_name == &model_name && *cached_gpu == use_gpu {
-                            Some(ctx.clone())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-
-                let context = if let Some(ctx) = context {
-                    ctx
-                } else {
-                    let mut params = whisper_rs::WhisperContextParameters::default();
-                    params.use_gpu = use_gpu;
-                    match whisper_rs::WhisperContext::new_with_params(
-                        dev_path.to_str().unwrap(),
-                        params,
-                    ) {
-                        Ok(ctx) => {
-                            let arc_ctx = Arc::new(ctx);
-                            *cache = Some((model_name, use_gpu, arc_ctx.clone()));
-                            arc_ctx
-                        }
-                        Err(e) => {
-                            error!("Failed to create Whisper context: {}", e);
-                            let _ = app.emit("status-update", "Engine error.");
-                            return;
-                        }
-                    }
-                };
-                drop(cache);
-
-                perform_transcription(
-                    &app,
-                    &tx,
-                    &context,
-                    &audio_data,
-                    &settings.selected_language,
-                    &settings.languages,
-                );
-                return;
-            }
-
+        if !model_path.exists() && !dev_path.exists() {
             // Try to download it if truly missing
             info!(
                 "Required model {} missing. Attempting download...",
                 model_filename
             );
-            let _ = app.emit(
+            let _ = app_handle.emit(
                 "status-update",
                 format!("Downloading {} model (75MB)...", model_name),
             );
@@ -352,7 +303,7 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
                         Ok(mut f) => {
                             if let Ok(_) = std::io::copy(&mut response, &mut f) {
                                 info!("Download complete: {:?}", model_path);
-                                let _ = app
+                                let _ = app_handle
                                     .emit("status-update", format!("{} model ready.", model_name));
                             } else {
                                 error!("Failed to write model file at {:?}", model_path);
@@ -360,8 +311,8 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
                         }
                         Err(e) => {
                             error!("Failed to create model file at {:?}: {}", model_path, e);
-                            let _ = app
-                                .emit("status-update", "Failed to create model file.".to_string());
+                            let _ =
+                                app_handle.emit("status-update", "Failed to create model file.");
                         }
                     }
                 }
@@ -370,60 +321,68 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
             }
         }
 
-        if model_path.exists() {
-            // Check cache or initialize
-            let mut cache = state.model_cache.lock().unwrap();
-            let context = if let Some((cached_name, cached_gpu, ctx)) = &*cache {
-                if cached_name == &model_name && *cached_gpu == use_gpu {
-                    Some(ctx.clone())
-                } else {
-                    None
-                }
+        let final_model_path = if model_path.exists() {
+            model_path
+        } else if dev_path.exists() {
+            dev_path
+        } else {
+            error!("Model not found: {}", model_filename);
+            let _ = app_handle.emit("status-update", "Model not found.");
+            *state.is_transcribing.lock().unwrap() = false;
+            let _ = app_handle.emit("transcribing-toggled", false);
+            return;
+        };
+
+        // Check cache or initialize
+        let mut cache = state.model_cache.lock().unwrap();
+        let context = if let Some((cached_name, cached_gpu, ctx)) = &*cache {
+            if cached_name == &model_name && *cached_gpu == use_gpu {
+                Some(ctx.clone())
             } else {
                 None
-            };
-
-            let context = if let Some(ctx) = context {
-                ctx
-            } else {
-                // Create new context
-                let mut params = whisper_rs::WhisperContextParameters::default();
-                params.use_gpu = use_gpu;
-                match whisper_rs::WhisperContext::new_with_params(
-                    model_path.to_str().unwrap(),
-                    params,
-                ) {
-                    Ok(ctx) => {
-                        let arc_ctx = Arc::new(ctx);
-                        *cache = Some((model_name, use_gpu, arc_ctx.clone()));
-                        arc_ctx
-                    }
-                    Err(e) => {
-                        error!("Failed to create Whisper context: {}", e);
-                        let _ = app.emit("status-update", "Engine error.");
-                        return;
-                    }
-                }
-            };
-            drop(cache); // Release lock before transcription
-
-            perform_transcription(
-                &app,
-                &tx,
-                &context,
-                &audio_data,
-                &settings.selected_language,
-                &settings.languages,
-            );
-
-            // Reset transcription guard
-            *state.is_transcribing.lock().unwrap() = false;
+            }
         } else {
-            error!("Model not found at {:?}", model_path);
-            let _ = app.emit("status-update", "Model missing. Please check connection.");
-            // Reset transcription guard on error too
-            *state.is_transcribing.lock().unwrap() = false;
-        }
+            None
+        };
+
+        let context = if let Some(ctx) = context {
+            ctx
+        } else {
+            let mut params = whisper_rs::WhisperContextParameters::default();
+            params.use_gpu = use_gpu;
+            match whisper_rs::WhisperContext::new_with_params(
+                final_model_path.to_str().unwrap(),
+                params,
+            ) {
+                Ok(ctx) => {
+                    let arc_ctx = Arc::new(ctx);
+                    *cache = Some((model_name, use_gpu, arc_ctx.clone()));
+                    arc_ctx
+                }
+                Err(e) => {
+                    error!("Failed to initialize Whisper: {}", e);
+                    let _ = app_handle.emit("status-update", "Engine error.");
+                    *state.is_transcribing.lock().unwrap() = false;
+                    let _ = app_handle.emit("transcribing-toggled", false);
+                    return;
+                }
+            }
+        };
+        drop(cache);
+
+        perform_transcription(
+            &app_handle,
+            &tx,
+            &context,
+            &audio_data,
+            &settings.selected_language,
+            &settings.languages,
+            is_cancelled,
+        );
+
+        // Reset guards
+        *state.is_transcribing.lock().unwrap() = false;
+        let _ = app_handle.emit("transcribing-toggled", false);
     });
 }
 
@@ -465,8 +424,9 @@ fn perform_transcription(
     audio_data: &[f32],
     lang: &str,
     allowed_langs: &[String],
+    is_cancelled: Arc<AtomicBool>,
 ) {
-    match transcribe(ctx, audio_data, lang, allowed_langs) {
+    match transcribe(ctx, audio_data, lang, allowed_langs, is_cancelled) {
         Ok(text) => {
             let trimmed = text.trim();
             if !trimmed.is_empty()
@@ -716,6 +676,7 @@ pub fn run() {
                 },
                 model_cache: Mutex::new(None),
                 is_transcribing: Mutex::new(false),
+                is_cancelled: Arc::new(AtomicBool::new(false)),
             });
 
             // Log system capabilities for performance debugging
