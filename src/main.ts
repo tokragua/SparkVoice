@@ -269,6 +269,10 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     } catch (error) {
       console.error("Failed to load settings:", error);
+      if (statusText) {
+        statusText.innerText = `INIT ERROR: ${error}`;
+      }
+      throw error; // Let the outer retry loop know this failed!
     }
   }
 
@@ -281,12 +285,38 @@ window.addEventListener("DOMContentLoaded", async () => {
       availableLanguagesSelect.add(option);
     });
 
-  await refreshUI();
+  // Retry loop for initialization (fixes race condition in Release mode)
+  let retryCount = 0;
+  let initSuccess = false;
 
-  // Auto-download tiny model if none exist (clean install)
-  const downloadedModels = await invoke<string[]>("get_downloaded_models");
-  if (downloadedModels.length === 0) {
-    await invoke("download_model", { model: "tiny" }).catch(() => { });
+  while (retryCount < 10) {
+    try {
+      await refreshUI();
+      // Auto-download tiny model if none exist (clean install)
+      const downloadedModels = await invoke<string[]>("get_downloaded_models");
+      if (downloadedModels.length === 0) {
+        await invoke("download_model", { model: "tiny" }).catch(() => { });
+        await refreshUI(); // refresh again after download
+      }
+      statusText.innerText = "Ready";
+      initSuccess = true;
+      break;
+    } catch (e: any) {
+      const errStr = String(e);
+      if (errStr.includes("not managed")) {
+        console.warn("State not managed yet, retrying...", e);
+        if (statusText) statusText.innerText = "Waiting for backend...";
+        await new Promise(r => setTimeout(r, 250));
+        retryCount++;
+      } else {
+        if (statusText) statusText.innerText = `INIT ERROR: ${errStr}`;
+        break; // Other error, don't retry
+      }
+    }
+  }
+
+  if (!initSuccess && retryCount >= 10 && statusText) {
+    statusText.innerText = "INIT ERROR: Backend timeout";
   }
 
   // Event Listeners

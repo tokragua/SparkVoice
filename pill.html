@@ -98,12 +98,13 @@
 
     .cancel-icon {
       position: absolute;
-      font-size: 16px;
-      color: #fff;
-      display: none;
+      font-size: 14px !important;
+      color: rgba(255, 255, 255, 0.6);
+      display: none !important;
       cursor: pointer;
       user-select: none;
       transition: transform 0.2s ease, color 0.2s ease;
+      line-height: 1;
     }
 
     .cancel-icon:hover {
@@ -116,7 +117,9 @@
     }
 
     .pill-container.transcribing .cancel-icon {
-      display: block;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
     }
 
     .pill-actions {
