@@ -3,7 +3,15 @@
 **Experience the future of universal dictation.**  
 SparkVoice is a high-performance, privacy-focused desktop application that brings OpenAI's Whisper models directly to your fingertips. Dictate into *any* application with zero-latency, multi-language auto-detection, and full GPU acceleration.
 
-![SparkVoice UI](src-tauri/icons/32x32.png) <!-- Replace with a real screenshot if available -->
+### Pill UI
+
+| Idle | Listening | Working |
+|------|-----------|---------|
+| ![Pill Idle](screenshots/pill-idle.png) | ![Pill Listening](screenshots/pill-listening.png) | ![Pill Working](screenshots/pill-working.png) |
+
+### Settings
+
+![Settings Panel](screenshots/settings.png)
 
 ---
 
