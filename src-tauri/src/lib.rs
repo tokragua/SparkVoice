@@ -1,4 +1,5 @@
 mod commands;
+mod errors;
 mod models;
 mod settings;
 mod whisper;

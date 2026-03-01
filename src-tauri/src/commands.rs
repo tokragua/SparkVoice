@@ -6,7 +6,8 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
 use crate::AppState;
-use crate::models::{validate_model_name, get_model_hash, get_model_size_display, verify_file_hash};
+use crate::errors::AppError;
+use crate::models::{download_model_to_path, get_model_size_display, validate_model_name};
 use crate::settings::{save_settings, AppSettings};
 use crate::whisper::{list_input_devices, transcribe};
 
@@ -62,12 +63,11 @@ pub fn set_input_device(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     device: String,
-) -> Result<(), String> {
-    // Update live stream
+) -> Result<(), AppError> {
     let tx = state.device_tx.lock();
-    tx.send(Some(device.clone())).map_err(|e| e.to_string())?;
+    tx.send(Some(device.clone()))
+        .map_err(|e| AppError::AudioDevice(e.to_string()))?;
 
-    // Save to settings
     let mut settings = state.settings.lock();
     settings.input_device = if device.is_empty() {
         None
@@ -83,23 +83,21 @@ pub fn set_shortcut(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     shortcut_str: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let new_shortcut: Shortcut = shortcut_str
         .parse()
-        .map_err(|e| format!("Invalid shortcut: {}", e))?;
+        .map_err(|e| AppError::Config(format!("Invalid shortcut: {}", e)))?;
 
     let mut settings = state.settings.lock();
     let old_shortcut_str = settings.recording_shortcut.clone();
 
-    // Unregister old shortcut if it exists
     if let Ok(old_shortcut) = old_shortcut_str.parse::<Shortcut>() {
         let _ = app.global_shortcut().unregister(old_shortcut);
     }
 
-    // Register new shortcut
     app.global_shortcut()
         .register(new_shortcut)
-        .map_err(|e| format!("Failed to register shortcut: {}", e))?;
+        .map_err(|e| AppError::Config(format!("Failed to register shortcut: {}", e)))?;
 
     settings.recording_shortcut = shortcut_str;
     save_settings(&app, &settings);
@@ -111,7 +109,7 @@ pub fn set_language(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     lang: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut settings = state.settings.lock();
     settings.selected_language = lang;
     save_settings(&app, &settings);
@@ -123,7 +121,7 @@ pub fn set_pill_collapsed(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     collapsed: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut settings = state.settings.lock();
     settings.pill_collapsed = collapsed;
     save_settings(&app, &settings);
@@ -135,7 +133,7 @@ pub fn add_language(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     lang: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut settings = state.settings.lock();
     if !settings.languages.contains(&lang) {
         settings.languages.push(lang);
@@ -149,7 +147,7 @@ pub fn remove_language(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     lang: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut settings = state.settings.lock();
     settings.languages.retain(|l| l != &lang);
     if settings.selected_language == lang {
@@ -168,7 +166,7 @@ pub fn set_device(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     device: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut settings = state.settings.lock();
     settings.device = device;
     save_settings(&app, &settings);
@@ -180,8 +178,7 @@ pub fn set_max_recording_duration(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     duration: u32,
-) -> Result<(), String> {
-    // Clamp to [10, 3600] to prevent excessive memory allocation
+) -> Result<(), AppError> {
     let clamped = duration.clamp(10, 3600);
     let mut settings = state.settings.lock();
     settings.max_recording_seconds = clamped;
@@ -194,7 +191,7 @@ pub fn set_launch_on_startup(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     enabled: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut settings = state.settings.lock();
     settings.launch_on_startup = enabled;
     save_settings(&app, &settings);
@@ -212,7 +209,6 @@ pub fn set_launch_on_startup(
 
 #[tauri::command]
 pub fn toggle_recording(app: tauri::AppHandle, state: tauri::State<'_, AppState>) {
-    // Read settings BEFORE locking whisper_state to maintain consistent lock ordering
     let max_recording_seconds = state.settings.lock().max_recording_seconds;
 
     let is_recording = {
@@ -227,7 +223,6 @@ pub fn toggle_recording(app: tauri::AppHandle, state: tauri::State<'_, AppState>
         ws.is_recording
     };
 
-    // Notify frontend with absolute state
     let _ = app.emit("recording-toggled", is_recording);
 
     if !is_recording {
@@ -238,7 +233,6 @@ pub fn toggle_recording(app: tauri::AppHandle, state: tauri::State<'_, AppState>
 pub fn stop_and_transcribe(app: tauri::AppHandle) {
     let state = app.state::<AppState>();
 
-    // Check if we are already transcribing
     {
         let mut transcribing = state.is_transcribing.lock();
         if *transcribing {
@@ -249,7 +243,6 @@ pub fn stop_and_transcribe(app: tauri::AppHandle) {
         state.is_cancelled.store(false, Ordering::SeqCst);
     }
 
-    // Notify pill UI that processing started
     let _ = app.emit("transcribing-toggled", true);
 
     let audio_data = {
@@ -299,10 +292,10 @@ pub fn stop_and_transcribe(app: tauri::AppHandle) {
             );
         }
 
-        // Validate model name to prevent path traversal
+        // Validate model name
         if let Err(e) = validate_model_name(&model_name) {
-            error!("Invalid model name: {}", e);
-            let _ = app_handle.emit("status-update", format!("Invalid model: {}", e));
+            error!("{}", e);
+            let _ = app_handle.emit("status-update", format!("{}", e));
             *state.is_transcribing.lock() = false;
             let _ = app_handle.emit("transcribing-toggled", false);
             return;
@@ -316,62 +309,25 @@ pub fn stop_and_transcribe(app: tauri::AppHandle) {
         let model_path = model_dir.join(&model_filename);
         let dev_path = std::path::PathBuf::from("src-tauri").join(&model_filename);
 
+        // Auto-download missing model using the shared download function
         if !model_path.exists() && !dev_path.exists() {
-            // Try to download it if truly missing
             let size_display = get_model_size_display(&model_name);
-            info!(
-                "Required model {} missing. Attempting download...",
-                model_filename
-            );
             let _ = app_handle.emit(
                 "status-update",
                 format!("Downloading {} model ({})...", model_name, size_display),
             );
 
-            let url = format!(
-                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin",
-                model_name
-            );
-            match reqwest::blocking::get(url) {
-                Ok(mut response) if response.status().is_success() => {
-                    match std::fs::File::create(&model_path) {
-                        Ok(mut f) => {
-                            if let Ok(_) = std::io::copy(&mut response, &mut f) {
-                                // Verify hash integrity
-                                if let Some(expected_hash) = get_model_hash(&model_name) {
-                                    match verify_file_hash(&model_path, expected_hash) {
-                                        Ok(true) => {
-                                            info!("Download complete and verified: {:?}", model_path);
-                                            let _ = app_handle.emit("status-update", format!("{} model ready.", model_name));
-                                        }
-                                        Ok(false) => {
-                                            error!("Hash mismatch for model {}! File may be corrupted or tampered with.", model_name);
-                                            let _ = std::fs::remove_file(&model_path);
-                                            let _ = app_handle.emit("status-update", "Download failed: integrity check failed.");
-                                        }
-                                        Err(e) => {
-                                            error!("Hash verification error: {}", e);
-                                            let _ = std::fs::remove_file(&model_path);
-                                            let _ = app_handle.emit("status-update", "Download failed: verification error.");
-                                        }
-                                    }
-                                } else {
-                                    info!("Download complete (no hash available): {:?}", model_path);
-                                    let _ = app_handle.emit("status-update", format!("{} model ready.", model_name));
-                                }
-                            } else {
-                                error!("Failed to write model file at {:?}", model_path);
-                                let _ = std::fs::remove_file(&model_path); // Clean up partial download
-                            }
-                        }
-                        Err(e) => {
-                            error!("Failed to create model file at {:?}: {}", model_path, e);
-                            let _ = app_handle.emit("status-update", "Failed to create model file.");
-                        }
-                    }
+            match download_model_to_path(&model_name, &model_dir) {
+                Ok(_) => {
+                    let _ = app_handle.emit("status-update", format!("{} model ready.", model_name));
                 }
-                Ok(response) => error!("Download failed with status: {}", response.status()),
-                Err(e) => error!("Download request error: {}", e),
+                Err(e) => {
+                    error!("{}", e);
+                    let _ = app_handle.emit("status-update", format!("{}", e));
+                    *state.is_transcribing.lock() = false;
+                    let _ = app_handle.emit("transcribing-toggled", false);
+                    return;
+                }
             }
         }
 
@@ -434,7 +390,6 @@ pub fn stop_and_transcribe(app: tauri::AppHandle) {
             is_cancelled,
         );
 
-        // Reset guards
         *state.is_transcribing.lock() = false;
         let _ = app_handle.emit("transcribing-toggled", false);
     });

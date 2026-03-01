@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 use tauri::{Emitter, Manager};
 
 use crate::AppState;
+use crate::errors::AppError;
 use crate::settings::save_settings;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -30,20 +31,21 @@ const AVAILABLE_MODELS: &[(&str, &str, &str, &str)] = &[
     ("large-v3-turbo-q5_0", "547 MiB", "Quantized large-v3-turbo", "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"),
 ];
 
+// ── Validation & Hashing ────────────────────────────────────────────────────
+
 /// Validates that a model name is safe (no path traversal, only allowed characters)
-pub fn validate_model_name(name: &str) -> Result<(), String> {
+pub fn validate_model_name(name: &str) -> Result<(), AppError> {
     if name.is_empty() {
-        return Err("Model name cannot be empty".to_string());
+        return Err(AppError::InvalidModel("Model name cannot be empty".into()));
     }
     if name.contains('/') || name.contains('\\') || name.contains("..") {
-        return Err("Invalid model name: contains path separators".to_string());
+        return Err(AppError::InvalidModel("Contains path separators".into()));
     }
     if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.') {
-        return Err("Invalid model name: contains disallowed characters".to_string());
+        return Err(AppError::InvalidModel("Contains disallowed characters".into()));
     }
-    // Must be a known model
     if !AVAILABLE_MODELS.iter().any(|(n, _, _, _)| *n == name) {
-        return Err(format!("Unknown model: {}", name));
+        return Err(AppError::InvalidModel(format!("Unknown model: {}", name)));
     }
     Ok(())
 }
@@ -61,13 +63,81 @@ pub fn get_model_size_display(name: &str) -> &str {
 }
 
 /// Verify a file's SHA256 hash matches the expected value
-pub fn verify_file_hash(path: &std::path::Path, expected_hash: &str) -> Result<bool, String> {
-    let mut file = std::fs::File::open(path).map_err(|e| format!("Failed to open file for verification: {}", e))?;
+pub fn verify_file_hash(path: &std::path::Path, expected_hash: &str) -> Result<bool, AppError> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| AppError::Io(format!("Failed to open file for verification: {}", e)))?;
     let mut hasher = Sha256::new();
-    std::io::copy(&mut file, &mut hasher).map_err(|e| format!("Failed to read file for hash: {}", e))?;
+    std::io::copy(&mut file, &mut hasher)
+        .map_err(|e| AppError::Io(format!("Failed to read file for hash: {}", e)))?;
     let result = hasher.finalize();
     let hash_hex = format!("{:x}", result);
     Ok(hash_hex == expected_hash)
+}
+
+// ── Shared Download Logic ───────────────────────────────────────────────────
+
+/// Downloads a model to the app data directory, verifies its hash, and returns
+/// the destination path. This is the single source of truth for model downloads,
+/// used by both the `download_model` command and the auto-download in
+/// `stop_and_transcribe`.
+pub fn download_model_to_path(
+    model: &str,
+    model_dir: &std::path::Path,
+) -> Result<std::path::PathBuf, AppError> {
+    let model_filename = format!("ggml-{}.bin", model);
+    let model_path = model_dir.join(&model_filename);
+
+    let size_display = get_model_size_display(model);
+    info!("Downloading model {} ({})...", model, size_display);
+
+    let url = format!(
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin",
+        model
+    );
+
+    let mut response = reqwest::blocking::get(&url)
+        .map_err(|e| AppError::Download(format!("Request failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        return Err(AppError::Download(format!(
+            "HTTP {} for {}",
+            response.status(),
+            url
+        )));
+    }
+
+    let mut f = std::fs::File::create(&model_path)
+        .map_err(|e| AppError::Io(format!("Failed to create {}: {}", model_filename, e)))?;
+
+    std::io::copy(&mut response, &mut f)
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&model_path);
+            AppError::Io(format!("Failed to write {}: {}", model_filename, e))
+        })?;
+
+    // Verify hash integrity
+    if let Some(expected_hash) = get_model_hash(model) {
+        match verify_file_hash(&model_path, expected_hash) {
+            Ok(true) => {
+                info!("Download complete and verified: {:?}", model_path);
+            }
+            Ok(false) => {
+                error!("Hash mismatch for model {}!", model);
+                let _ = std::fs::remove_file(&model_path);
+                return Err(AppError::IntegrityCheck(format!(
+                    "SHA256 mismatch for {}", model
+                )));
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(&model_path);
+                return Err(e);
+            }
+        }
+    } else {
+        info!("Download complete (no hash available): {:?}", model_path);
+    }
+
+    Ok(model_path)
 }
 
 // ── Tauri Commands ──────────────────────────────────────────────────────────
@@ -112,7 +182,7 @@ pub fn select_model(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     model: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     validate_model_name(&model)?;
     let mut settings = state.settings.lock();
     settings.selected_model = model;
@@ -121,7 +191,7 @@ pub fn select_model(
 }
 
 #[tauri::command]
-pub fn delete_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
+pub fn delete_model(app: tauri::AppHandle, model: String) -> Result<(), AppError> {
     validate_model_name(&model)?;
     let model_filename = format!("ggml-{}.bin", model);
     let model_path = app
@@ -131,19 +201,18 @@ pub fn delete_model(app: tauri::AppHandle, model: String) -> Result<(), String> 
         .join(model_filename);
 
     if model_path.exists() {
-        std::fs::remove_file(model_path).map_err(|e| e.to_string())?;
+        std::fs::remove_file(model_path)?;
         Ok(())
     } else {
-        Err("Model not found".to_string())
+        Err(AppError::InvalidModel("Model file not found".into()))
     }
 }
 
 #[tauri::command]
-pub fn download_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
+pub fn download_model(app: tauri::AppHandle, model: String) -> Result<(), AppError> {
     validate_model_name(&model)?;
     let app_clone = app.clone();
     std::thread::spawn(move || {
-        let model_filename = format!("ggml-{}.bin", model);
         let model_dir = app_clone
             .path()
             .app_data_dir()
@@ -151,52 +220,22 @@ pub fn download_model(app: tauri::AppHandle, model: String) -> Result<(), String
         if !model_dir.exists() {
             let _ = std::fs::create_dir_all(&model_dir);
         }
-        let model_path = model_dir.join(&model_filename);
 
         let size_display = get_model_size_display(&model);
-        info!("Downloading model {} ({})...", model, size_display);
-        let _ = app_clone.emit("model-download-status", format!("Downloading {} ({})...", model, size_display));
-
-        let url = format!(
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin",
-            model
+        let _ = app_clone.emit(
+            "model-download-status",
+            format!("Downloading {} ({})...", model, size_display),
         );
-        match reqwest::blocking::get(url) {
-            Ok(mut response) if response.status().is_success() => {
-                if let Ok(mut f) = std::fs::File::create(&model_path) {
-                    if let Ok(_) = std::io::copy(&mut response, &mut f) {
-                        // Verify hash integrity
-                        if let Some(expected_hash) = get_model_hash(&model) {
-                            match verify_file_hash(&model_path, expected_hash) {
-                                Ok(true) => {
-                                    info!("Download complete and verified: {:?}", model_path);
-                                    let _ = app_clone.emit("model-download-status", "ready".to_string());
-                                }
-                                Ok(false) => {
-                                    error!("Hash mismatch for downloaded model {}!", model);
-                                    let _ = std::fs::remove_file(&model_path);
-                                    let _ = app_clone.emit("model-download-status", "error: integrity check failed".to_string());
-                                }
-                                Err(e) => {
-                                    error!("Hash verification error: {}", e);
-                                    let _ = std::fs::remove_file(&model_path);
-                                    let _ = app_clone.emit("model-download-status", "error: verification failed".to_string());
-                                }
-                            }
-                        } else {
-                            info!("Download complete (no hash): {:?}", model_path);
-                            let _ = app_clone.emit("model-download-status", "ready".to_string());
-                        }
-                    } else {
-                        let _ = std::fs::remove_file(&model_path); // Clean up partial
-                        let _ = app_clone.emit("model-download-status", "error: write failed".to_string());
-                    }
-                }
+
+        match download_model_to_path(&model, &model_dir) {
+            Ok(_) => {
+                let _ = app_clone.emit("model-download-status", "ready".to_string());
             }
-            _ => {
+            Err(e) => {
+                error!("Model download failed: {}", e);
                 let _ = app_clone.emit(
                     "model-download-status",
-                    "error: download failed".to_string(),
+                    format!("error: {}", e),
                 );
             }
         }
