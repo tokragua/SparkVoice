@@ -51,7 +51,7 @@ To enable high-speed transcription on NVIDIA GPUs (RTX 20/30/40/50 series):
 
 ### 1. Clone the Repository
 ```powershell
-git clone https://github.com/your-username/SparkVoice.git
+git clone https://github.com/tokragua/SparkVoice.git
 cd SparkVoice
 ```
 
@@ -105,11 +105,15 @@ The output will be located in: `src-tauri/target/release/bundle/msi/`
 
 ## ⚙️ Configuration
 
-- **Hotkey**: Default is `F2`. Hold to record, release to transcribe.
+- **Hotkey**: Default is `F2`. Press once to start recording, press again to transcribe.
 - **Models**: The first time you use a model, the app will download it automatically from HuggingFace.
 - **Device**: Switch between "CPU" and "CUDA" (GPU) in the Settings panel to optimize for your hardware.
 
 ---
+
+## 📝 Roadmap
+
+- [ ] Add support for macOS
 
 ## 📄 License
 
