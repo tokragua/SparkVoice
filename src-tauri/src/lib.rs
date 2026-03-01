@@ -434,6 +434,7 @@ fn perform_transcription(
                 && !trimmed.contains("[SILENCE]")
             {
                 info!("Transcribed text: {}", trimmed);
+                let _ = app.emit("transcribed-text", trimmed.to_string());
                 let _ = tx.send(trimmed.to_string());
             }
         }
@@ -561,6 +562,18 @@ fn start_dragging(window: tauri::Window) {
 #[tauri::command]
 fn is_cuda_supported() -> bool {
     cfg!(feature = "cuda")
+}
+
+#[tauri::command]
+fn open_settings(app: tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        } else {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
 }
 
 #[tauri::command]
@@ -817,6 +830,7 @@ pub fn run() {
             get_app_version,
             is_cuda_supported,
             cancel_transcription,
+            open_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

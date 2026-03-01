@@ -8,6 +8,7 @@ const ctx = canvas.getContext("2d")!;
 
 let isRecording = false;
 let isTranscribing = false;
+let lastTranscription = "";
 let currentAmplitude = 0;
 let smoothedAmplitude = 0;
 let sweepPos = 0;
@@ -19,6 +20,8 @@ function resizeCanvas() {
 }
 
 window.addEventListener("resize", resizeCanvas);
+// Call resize on load and also handle if it's 0 early on
+window.addEventListener("DOMContentLoaded", resizeCanvas);
 resizeCanvas();
 
 // Disable right-click context menu
@@ -26,6 +29,10 @@ window.addEventListener("contextmenu", (e) => e.preventDefault());
 
 function drawWaveform() {
     if (!ctx) return;
+
+    if (canvas.width === 0) {
+        resizeCanvas();
+    }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -113,16 +120,41 @@ micToggle.addEventListener("click", () => {
     invoke("toggle_recording");
 });
 
-const cancelIcon = document.querySelector(".cancel-icon");
-cancelIcon?.addEventListener("click", (e) => {
+const cancelIcon = document.querySelector(".cancel-icon") as HTMLElement | null;
+cancelIcon?.addEventListener("click", (e: Event) => {
     e.stopPropagation();
     invoke("cancel_transcription");
 });
 
-pillContainer.addEventListener("mousedown", (e) => {
+const settingsBtn = document.getElementById("settings-btn") as HTMLElement | null;
+settingsBtn?.addEventListener("click", (e: Event) => {
+    e.stopPropagation();
+    invoke("open_settings");
+});
+
+const copyBtn = document.getElementById("copy-btn") as HTMLElement | null;
+copyBtn?.addEventListener("click", (e: Event) => {
+    e.stopPropagation();
+    if (lastTranscription) {
+        navigator.clipboard.writeText(lastTranscription).then(() => {
+            // Visual feedback
+            const originalIcon = copyBtn.innerText;
+            copyBtn.innerText = "check";
+            copyBtn.style.color = "#00ff88";
+            setTimeout(() => {
+                copyBtn.innerText = originalIcon;
+                copyBtn.style.color = "";
+            }, 2000);
+        });
+    }
+});
+
+pillContainer.addEventListener("mousedown", (e: MouseEvent) => {
     // Check if we're not clicking interactive elements
-    if (!(e.target as HTMLElement).closest("#mic-toggle") &&
-        !(e.target as HTMLElement).closest(".cancel-icon")) {
+    const target = e.target as HTMLElement;
+    if (!target.closest("#mic-toggle") &&
+        !target.closest(".status-container") &&
+        !target.closest(".pill-actions")) {
         invoke("start_dragging");
     }
 });
@@ -149,4 +181,9 @@ listen("transcribing-toggled", (event) => {
 
 listen("audio-amplitude", (event) => {
     currentAmplitude = event.payload as number;
+});
+
+listen("transcribed-text", (event) => {
+    lastTranscription = event.payload as string;
+    console.log("Captured transcription:", lastTranscription);
 });

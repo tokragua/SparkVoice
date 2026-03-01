@@ -22,8 +22,8 @@
       {
         "label": "pill",
         "title": "SparkVoice",
-        "width": 220,
-        "height": 80,
+        "width": 280,
+        "height": 100,
         "alwaysOnTop": true,
         "decorations": false,
         "transparent": true,

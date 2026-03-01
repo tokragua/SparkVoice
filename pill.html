@@ -22,7 +22,7 @@
     }
 
     .pill-container {
-      width: 190px;
+      width: 240px;
       height: 50px;
       background: rgba(15, 15, 15, 0.9);
       backdrop-filter: blur(12px);
@@ -62,7 +62,7 @@
     .waveform-container {
       flex-grow: 1;
       height: 30px;
-      margin: 0 10px;
+      margin: 0 8px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -76,7 +76,6 @@
     .status-container {
       width: 12px;
       height: 12px;
-      margin-left: 12px;
       position: relative;
       cursor: default;
       display: flex;
@@ -121,6 +120,34 @@
       display: block;
     }
 
+    .pill-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-left: 8px;
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+      padding-left: 8px;
+    }
+
+    .action-btn {
+      font-size: 18px !important;
+      color: rgba(255, 255, 255, 0.5);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 50%;
+    }
+
+    .action-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+      transform: rotate(30deg);
+    }
+
     @keyframes pulse {
       0% {
         opacity: 1;
@@ -153,6 +180,10 @@
     <div class="status-container" id="status-container">
       <div class="status-dot"></div>
       <div class="cancel-icon material-symbols-outlined">close</div>
+    </div>
+    <div class="pill-actions">
+      <div class="action-btn material-symbols-outlined" id="copy-btn" title="Copy Last Text">content_copy</div>
+      <div class="action-btn material-symbols-outlined" id="settings-btn" title="Settings">settings</div>
     </div>
   </div>
   <script type="module" src="/src/pill.ts"></script>
