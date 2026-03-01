@@ -27,11 +27,23 @@ Before compiling SparkVoice, ensure you have the following installed on your Win
 - **[Node.js (LTS)](https://nodejs.org/)**: Required for the Tauri frontend.
 - **[Visual Studio 2022](https://visualstudio.microsoft.com/vs/community/)**: Install with the "Desktop development with C++" workload.
 
-### 2. GPU Acceleration (Recommended)
-To enable high-speed transcription on NVIDIA cards (e.g., RTX 30/40 series):
-- **[CUDA Toolkit 12.8+](https://developer.nvidia.com/cuda-downloads)**: Essential for hardware acceleration.
-- **[Latest CMake](https://cmake.org/download/)**: Ensure it is added to your System PATH.
-- **[LLVM](https://github.com/llvm/llvm-project/releases)**: Required for Rust-to-C++ bindings (add the `bin` folder to your PATH).
+### 2. GPU Acceleration (NVIDIA CUDA)
+To enable high-speed transcription on NVIDIA GPUs (RTX 20/30/40/50 series):
+
+1. **[CUDA Toolkit 12.x](https://developer.nvidia.com/cuda-downloads)** — Download and install the latest CUDA Toolkit for Windows. This includes **cuBLAS**, the GPU math library that whisper.cpp uses internally.
+   - During installation, ensure **"CUDA > Development > Libraries"** and **"CUDA > Runtime"** are checked.
+   - The installer will set the `CUDA_PATH` environment variable automatically.
+
+2. **[CMake](https://cmake.org/download/)** — Required to compile the native whisper.cpp library. Make sure it's added to your System PATH during installation.
+
+3. **[LLVM/Clang](https://github.com/llvm/llvm-project/releases)** — Required for Rust-to-C++ FFI bindings (`bindgen`). Download the latest LLVM release for Windows, install it, and add the `bin` folder to your System PATH. Then set:
+   ```powershell
+   # Add to your PowerShell profile or run before building:
+   $env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
+   ```
+
+> [!IMPORTANT]
+> **End-user requirement**: Users running a CUDA-enabled SparkVoice build must have the **NVIDIA CUDA Runtime** installed on their system. The CUDA Toolkit is only needed for *compiling* — for running the app, the CUDA runtime (included with recent NVIDIA GPU drivers) is sufficient.
 
 ---
 
