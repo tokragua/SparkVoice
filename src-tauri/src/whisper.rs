@@ -1,7 +1,8 @@
 use anyhow::Result;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use log::{error, info, warn};
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use tauri::Emitter;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
 
@@ -87,7 +88,7 @@ fn process_audio(
     channels: usize,
     app_handle: &tauri::AppHandle,
 ) {
-    let mut s = state.lock().unwrap();
+    let mut s = state.lock();
 
     // Calculate RMS for visualization
     let len = data.len();
@@ -176,10 +177,12 @@ pub fn transcribe(
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
 
-    // C-style abort callback for safer, stable cancellation without UB
+    // Use Arc::into_raw to safely pass the AtomicBool to C callback.
+    // This increments the ref count, preventing use-after-free.
+    let is_cancelled_for_callback = Arc::into_raw(is_cancelled.clone()) as *mut std::ffi::c_void;
     unsafe {
         params.set_abort_callback(Some(abort_callback));
-        params.set_abort_callback_user_data(Arc::as_ptr(&is_cancelled) as *mut std::ffi::c_void);
+        params.set_abort_callback_user_data(is_cancelled_for_callback);
     }
 
     info!("Processing transcription with {} CPU threads...", threads);
@@ -187,12 +190,16 @@ pub fn transcribe(
 
     // Explicitly handle results to check for cancellation before returning engine errors
     if let Err(e) = state.full(params, audio_data) {
+        // Reclaim the Arc ref count we leaked via into_raw
+        unsafe { Arc::from_raw(is_cancelled_for_callback as *const AtomicBool); }
         if is_cancelled.load(Ordering::SeqCst) {
             warn!("Transcription aborted by user flag.");
             return Err(anyhow::anyhow!("Transcription cancelled by user."));
         }
         return Err(e.into());
     }
+    // Reclaim the Arc ref count we leaked via into_raw
+    unsafe { Arc::from_raw(is_cancelled_for_callback as *const AtomicBool); }
 
     let duration = start.elapsed();
 
@@ -225,22 +232,23 @@ pub fn transcribe(
                     retry_params.set_print_realtime(false);
                     retry_params.set_print_timestamps(false);
 
-                    // Add cancellation callback to retry too
+                    // Use Arc::into_raw for the retry callback too
+                    let is_cancelled_for_retry = Arc::into_raw(is_cancelled.clone()) as *mut std::ffi::c_void;
                     unsafe {
                         retry_params.set_abort_callback(Some(abort_callback));
-                        retry_params.set_abort_callback_user_data(
-                            Arc::as_ptr(&is_cancelled) as *mut std::ffi::c_void
-                        );
+                        retry_params.set_abort_callback_user_data(is_cancelled_for_retry);
                     }
 
                     // Explicitly handle results to check for cancellation before returning engine errors
                     if let Err(e) = state.full(retry_params, audio_data) {
+                        unsafe { Arc::from_raw(is_cancelled_for_retry as *const AtomicBool); }
                         if is_cancelled.load(Ordering::SeqCst) {
                             warn!("Transcription retry aborted by user flag.");
                             return Err(anyhow::anyhow!("Transcription cancelled by user."));
                         }
                         return Err(e.into());
                     }
+                    unsafe { Arc::from_raw(is_cancelled_for_retry as *const AtomicBool); }
                 }
             }
         }

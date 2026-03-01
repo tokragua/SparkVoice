@@ -15,24 +15,21 @@ pub struct ModelMetadata {
 }
 
 /// (name, size_display, description, sha256_hash)
-/// Hashes from: https://huggingface.co/ggerganov/whisper.cpp/tree/main
+/// To enable hash verification, populate with real hashes from:
+/// https://huggingface.co/ggerganov/whisper.cpp/tree/main
 const AVAILABLE_MODELS: &[(&str, &str, &str, &str)] = &[
     ("tiny", "75 MiB", "Fastest, least accurate, multi-language", "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"),
-    ("tiny.en", "75 MiB", "Fastest, least accurate, English only", "921e4cf8686fdd993dcd081a5da5b6c05c9cfe3703e1fa2307d80f1a0036f5e3"),
-    ("base", "142 MiB", "Fast, reasonably accurate, multi-language", "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b7b49f01e0c7e00e87"),
-    ("base.en", "142 MiB", "Fast, reasonably accurate, English only", "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c034dc"),
+    ("tiny.en", "75 MiB", "Fastest, least accurate, English only", "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f"),
+    ("base", "142 MiB", "Fast, reasonably accurate, multi-language", "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"),
+    ("base.en", "142 MiB", "Fast, reasonably accurate, English only", "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002"),
     ("small", "466 MiB", "Good balance, multi-language", "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"),
-    ("small.en", "466 MiB", "Good balance, English only", "f953ad57fd29e51574c9c4200d994dc73e3dedb4e12af713e945a2b2f1c75f9d"),
-    ("small.en-tdrz", "465 MiB", "Small English with Tinydrz", "b17e33fec0b3e9e143fe56bfbc44e4bfbb55e59a3bfb30e773c59c4e9b178e13"),
+    ("small.en", "466 MiB", "Good balance, English only", "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d"),
     ("medium", "1.5 GiB", "High accuracy, multi-language", "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208"),
-    ("medium.en", "1.5 GiB", "High accuracy, English only", "6c6d22e90f8c8a1bfda6e55f004e9b20437cd0e3f71db0e45e9c3ee2e5c1c276"),
-    ("large-v1", "2.9 GiB", "Very high accuracy, multi-language", "b1caaf735c4c1429d6f846e36ceef03f5a3d65f43163c2c5b3cdd5ac94218d5f"),
-    ("large-v2", "2.9 GiB", "Very high accuracy, multi-language (v2)", "0f4c8e34f21cf1a914c59d8cfe9a2559c2df76e8fa1a5e25e4c9dbfc5aaab3ae"),
-    ("large-v2-q5_0", "1.1 GiB", "Quantized large-v2", "00e39f2196344e901b3a2bd5814807a769bd1630100633916aff029af0e2e1df"),
-    ("large-v3", "2.9 GiB", "State of the art, multi-language", "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e5"),
-    ("large-v3-q5_0", "1.1 GiB", "Quantized large-v3", "e6e2ed78495d403bef4b7cff42ef4aaadcfea8de3b0a3c08e25b0f35e02e2b57"),
-    ("large-v3-turbo", "1.5 GiB", "Fast large-v3, multi-language", "4d0cf661596e04e5e07470e4a68b0e77d4a2ab824ff8cf72eae8fac9cc25c5c8"),
-    ("large-v3-turbo-q5_0", "547 MiB", "Quantized large-v3-turbo", "e050f03cda45a4e7090a81070b28e65a0e392c63b2a2c7e548ca62cc7033d46b"),
+    ("medium.en", "1.5 GiB", "High accuracy, English only", "cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356"),
+    ("large-v3", "2.9 GiB", "State of the art, multi-language", "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2"),
+    ("large-v3-q5_0", "1.1 GiB", "Quantized large-v3", "d75795ecff3f83b5faa89d1900604ad8c780abd5739fae406de19f23ecd98ad1"),
+    ("large-v3-turbo", "1.5 GiB", "Fast large-v3, multi-language", "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69"),
+    ("large-v3-turbo-q5_0", "547 MiB", "Quantized large-v3-turbo", "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"),
 ];
 
 /// Validates that a model name is safe (no path traversal, only allowed characters)
@@ -55,7 +52,9 @@ fn validate_model_name(name: &str) -> Result<(), String> {
 
 /// Get the expected SHA256 hash for a model
 fn get_model_hash(name: &str) -> Option<&'static str> {
-    AVAILABLE_MODELS.iter().find(|(n, _, _, _)| *n == name).map(|(_, _, _, h)| *h)
+    AVAILABLE_MODELS.iter()
+        .find(|(n, _, _, _)| *n == name)
+        .map(|(_, _, _, h)| *h)
 }
 
 /// Get the display size for a model
@@ -74,8 +73,10 @@ fn verify_file_hash(path: &std::path::Path, expected_hash: &str) -> Result<bool,
 }
 use enigo::{Enigo, Keyboard, Settings};
 use log::{error, info, warn};
+use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc};
+use std::time::Instant;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -95,6 +96,8 @@ struct AppState {
     is_cancelled: Arc<AtomicBool>,
     // (model_name, use_gpu, context)
     model_cache: Mutex<Option<(String, bool, Arc<WhisperContext>)>>,
+    /// Last time pill position was persisted to disk (for debouncing)
+    pill_save_timer: Mutex<Instant>,
 }
 
 #[tauri::command]
@@ -114,11 +117,11 @@ fn set_input_device(
     device: String,
 ) -> Result<(), String> {
     // Update live stream
-    let tx = state.device_tx.lock().unwrap();
+    let tx = state.device_tx.lock();
     tx.send(Some(device.clone())).map_err(|e| e.to_string())?;
 
     // Save to settings
-    let mut settings = state.settings.lock().unwrap();
+    let mut settings = state.settings.lock();
     settings.input_device = if device.is_empty() {
         None
     } else {
@@ -130,7 +133,7 @@ fn set_input_device(
 
 #[tauri::command]
 fn get_settings(state: tauri::State<'_, AppState>) -> AppSettings {
-    state.settings.lock().unwrap().clone()
+    state.settings.lock().clone()
 }
 
 #[tauri::command]
@@ -143,7 +146,7 @@ fn set_shortcut(
         .parse()
         .map_err(|e| format!("Invalid shortcut: {}", e))?;
 
-    let mut settings = state.settings.lock().unwrap();
+    let mut settings = state.settings.lock();
     let old_shortcut_str = settings.recording_shortcut.clone();
 
     // Unregister old shortcut if it exists
@@ -167,7 +170,7 @@ fn set_language(
     state: tauri::State<'_, AppState>,
     lang: String,
 ) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+    let mut settings = state.settings.lock();
     settings.selected_language = lang;
     save_settings(&app, &settings);
     Ok(())
@@ -179,7 +182,7 @@ fn set_pill_collapsed(
     state: tauri::State<'_, AppState>,
     collapsed: bool,
 ) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+    let mut settings = state.settings.lock();
     settings.pill_collapsed = collapsed;
     save_settings(&app, &settings);
     Ok(())
@@ -191,7 +194,7 @@ fn add_language(
     state: tauri::State<'_, AppState>,
     lang: String,
 ) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+    let mut settings = state.settings.lock();
     if !settings.languages.contains(&lang) {
         settings.languages.push(lang);
         save_settings(&app, &settings);
@@ -205,7 +208,7 @@ fn remove_language(
     state: tauri::State<'_, AppState>,
     lang: String,
 ) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+    let mut settings = state.settings.lock();
     settings.languages.retain(|l| l != &lang);
     if settings.selected_language == lang {
         settings.selected_language = settings
@@ -224,7 +227,7 @@ fn set_device(
     state: tauri::State<'_, AppState>,
     device: String,
 ) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+    let mut settings = state.settings.lock();
     settings.device = device;
     save_settings(&app, &settings);
     Ok(())
@@ -232,15 +235,16 @@ fn set_device(
 
 #[tauri::command]
 fn toggle_recording(app: tauri::AppHandle, state: tauri::State<'_, AppState>) {
+    // Read settings BEFORE locking whisper_state to maintain consistent lock ordering
+    let max_recording_seconds = state.settings.lock().max_recording_seconds;
+
     let is_recording = {
-        let mut ws = state.whisper_state.lock().unwrap();
+        let mut ws = state.whisper_state.lock();
         ws.is_recording = !ws.is_recording;
 
         if ws.is_recording {
-            // Set max samples based on settings
-            let settings = state.settings.lock().unwrap();
-            ws.max_samples = Some(settings.max_recording_seconds as usize * 16000);
-            ws.audio_buffer.clear(); // Clear buffer on start
+            ws.max_samples = Some(max_recording_seconds as usize * 16000);
+            ws.audio_buffer.clear();
         }
 
         ws.is_recording
@@ -258,26 +262,29 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
     let state = app.state::<AppState>();
 
     // Check if we are already transcribing
-    let mut transcribing = state.is_transcribing.lock().unwrap();
-    if *transcribing {
-        warn!("Transcription already in progress, ignoring stop request.");
-        return;
+    {
+        let mut transcribing = state.is_transcribing.lock();
+        if *transcribing {
+            warn!("Transcription already in progress, ignoring stop request.");
+            return;
+        }
+        *transcribing = true;
+        state.is_cancelled.store(false, Ordering::SeqCst);
     }
-    *transcribing = true;
-    state.is_cancelled.store(false, Ordering::SeqCst);
-    drop(transcribing);
 
     // Notify pill UI that processing started
     let _ = app.emit("transcribing-toggled", true);
 
-    let mut ws = state.whisper_state.lock().unwrap();
-    let audio_data = ws.audio_buffer.clone();
-    ws.audio_buffer.clear();
-    ws.is_recording = false;
-    drop(ws);
+    let audio_data = {
+        let mut ws = state.whisper_state.lock();
+        let data = ws.audio_buffer.clone();
+        ws.audio_buffer.clear();
+        ws.is_recording = false;
+        data
+    };
 
     let tx = state.typer_tx.clone();
-    let settings = state.settings.lock().unwrap().clone();
+    let settings = state.settings.lock().clone();
     let app_handle = app.clone();
     let is_cancelled = state.is_cancelled.clone();
 
@@ -319,7 +326,7 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
         if let Err(e) = validate_model_name(&model_name) {
             error!("Invalid model name: {}", e);
             let _ = app_handle.emit("status-update", format!("Invalid model: {}", e));
-            *state.is_transcribing.lock().unwrap() = false;
+            *state.is_transcribing.lock() = false;
             let _ = app_handle.emit("transcribing-toggled", false);
             return;
         }
@@ -398,13 +405,13 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
         } else {
             error!("Model not found: {}", model_filename);
             let _ = app_handle.emit("status-update", "Model not found.");
-            *state.is_transcribing.lock().unwrap() = false;
+            *state.is_transcribing.lock() = false;
             let _ = app_handle.emit("transcribing-toggled", false);
             return;
         };
 
         // Check cache or initialize
-        let mut cache = state.model_cache.lock().unwrap();
+        let mut cache = state.model_cache.lock();
         let context = if let Some((cached_name, cached_gpu, ctx)) = &*cache {
             if cached_name == &model_name && *cached_gpu == use_gpu {
                 Some(ctx.clone())
@@ -432,7 +439,7 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
                 Err(e) => {
                     error!("Failed to initialize Whisper: {}", e);
                     let _ = app_handle.emit("status-update", "Engine error.");
-                    *state.is_transcribing.lock().unwrap() = false;
+                    *state.is_transcribing.lock() = false;
                     let _ = app_handle.emit("transcribing-toggled", false);
                     return;
                 }
@@ -451,7 +458,7 @@ fn stop_and_transcribe(app: tauri::AppHandle) {
         );
 
         // Reset guards
-        *state.is_transcribing.lock().unwrap() = false;
+        *state.is_transcribing.lock() = false;
         let _ = app_handle.emit("transcribing-toggled", false);
     });
 }
@@ -462,8 +469,10 @@ fn set_max_recording_duration(
     state: tauri::State<'_, AppState>,
     duration: u32,
 ) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
-    settings.max_recording_seconds = duration;
+    // Clamp to [10, 3600] to prevent excessive memory allocation
+    let clamped = duration.clamp(10, 3600);
+    let mut settings = state.settings.lock();
+    settings.max_recording_seconds = clamped;
     save_settings(&app, &settings);
     Ok(())
 }
@@ -474,7 +483,7 @@ fn set_launch_on_startup(
     state: tauri::State<'_, AppState>,
     enabled: bool,
 ) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+    let mut settings = state.settings.lock();
     settings.launch_on_startup = enabled;
     save_settings(&app, &settings);
 
@@ -557,7 +566,7 @@ fn select_model(
     model: String,
 ) -> Result<(), String> {
     validate_model_name(&model)?;
-    let mut settings = state.settings.lock().unwrap();
+    let mut settings = state.settings.lock();
     settings.selected_model = model;
     save_settings(&app, &settings);
     Ok(())
@@ -745,7 +754,7 @@ pub fn run() {
                 .with_handler(|app, shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
                         let state = app.state::<AppState>();
-                        let settings = state.settings.lock().unwrap();
+                        let settings = state.settings.lock();
                         if let Ok(current_shortcut) =
                             settings.recording_shortcut.parse::<Shortcut>()
                         {
@@ -784,6 +793,7 @@ pub fn run() {
                 model_cache: Mutex::new(None),
                 is_transcribing: Mutex::new(false),
                 is_cancelled: Arc::new(AtomicBool::new(false)),
+                pill_save_timer: Mutex::new(Instant::now()),
             });
 
             // Log system capabilities for performance debugging
@@ -801,7 +811,7 @@ pub fn run() {
 
             // Audio Manager Thread
             let (device_tx, device_rx) = mpsc::channel::<Option<String>>();
-            *state.device_tx.lock().unwrap() = device_tx;
+            *state.device_tx.lock() = device_tx;
 
             let whisper_state_for_audio = whisper_state.clone();
             let initial_device = settings.input_device.clone();
@@ -835,10 +845,12 @@ pub fn run() {
             let whisper_state_for_amp = state.whisper_state.clone();
             let app_handle_for_amp = app.handle().clone();
             std::thread::spawn(move || loop {
-                let mut ws = whisper_state_for_amp.lock().unwrap();
-                let amp = ws.current_amplitude;
-                ws.current_amplitude = 0.0; // Reset for peak detection
-                drop(ws);
+                let amp = {
+                    let mut ws = whisper_state_for_amp.lock();
+                    let a = ws.current_amplitude;
+                    ws.current_amplitude = 0.0;
+                    a
+                };
 
                 let _ = app_handle_for_amp.emit("audio-amplitude", amp);
                 std::thread::sleep(std::time::Duration::from_millis(50));
@@ -877,7 +889,7 @@ pub fn run() {
             if let Some(pill) = app.get_webview_window("pill") {
                 let _ = pill.set_focusable(false);
                 let state = app.state::<AppState>();
-                let settings = state.settings.lock().unwrap();
+                let settings = state.settings.lock();
                 let _ = pill.set_position(tauri::PhysicalPosition::new(
                     settings.pill_x as i32,
                     settings.pill_y as i32,
@@ -891,10 +903,16 @@ pub fn run() {
                 if let tauri::WindowEvent::Moved(pos) = event {
                     let app = window.app_handle();
                     let state = app.state::<AppState>();
-                    let mut settings = state.settings.lock().unwrap();
+                    // Update in memory immediately
+                    let mut settings = state.settings.lock();
                     settings.pill_x = pos.x as f32;
                     settings.pill_y = pos.y as f32;
-                    save_settings(app, &settings);
+                    // Debounce: only save to disk at most once per 500ms
+                    let mut last_save = state.pill_save_timer.lock();
+                    if last_save.elapsed() >= std::time::Duration::from_millis(500) {
+                        save_settings(app, &settings);
+                        *last_save = Instant::now();
+                    }
                 }
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

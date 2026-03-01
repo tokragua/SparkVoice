@@ -63,7 +63,14 @@ pub fn load_settings(app: &AppHandle) -> AppSettings {
 
 pub fn save_settings(app: &AppHandle, settings: &AppSettings) {
     let path = get_settings_path(app);
-    if let Ok(content) = serde_json::to_string_pretty(settings) {
-        let _ = fs::write(path, content);
+    match serde_json::to_string_pretty(settings) {
+        Ok(content) => {
+            if let Err(e) = fs::write(&path, content) {
+                log::error!("Failed to write settings to {:?}: {}", path, e);
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to serialize settings: {}", e);
+        }
     }
 }

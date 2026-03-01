@@ -1,6 +1,28 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+/** Mirrors the Rust AppSettings struct */
+interface AppSettings {
+  selected_language: string;
+  languages: string[];
+  device: string;
+  input_device: string | null;
+  pill_x: number;
+  pill_y: number;
+  selected_model: string;
+  launch_on_startup: boolean;
+  recording_shortcut: string;
+  max_recording_seconds: number;
+  pill_collapsed: boolean;
+}
+
+/** Mirrors the Rust ModelMetadata struct */
+interface ModelMetadata {
+  name: string;
+  size: string;
+  description: string;
+}
+
 const WHISPER_LANGUAGES = [
   "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar", "sv", "it", "id", "hi", "fi", "vi", "he", "uk", "el", "ms", "cs", "ro", "da", "hu", "ta", "no", "th", "ur", "hr", "bg", "lt", "la", "mi", "ml", "cy", "sk", "te", "fa", "lv", "bn", "sr", "az", "sl", "kn", "et", "mk", "br", "eu", "is", "hy", "ne", "mn", "bs", "kk", "sq", "sw", "gl", "mr", "pa", "si", "km", "sn", "yo", "so", "af", "oc", "ka", "be", "tg", "sd", "gu", "am", "yi", "lo", "uz", "fo", "ht", "ps", "tk", "nn", "mt", "sa", "lb", "my", "bo", "tl", "mg", "as", "tt", "haw", "ln", "ha", "ba", "jw", "su"
 ];
@@ -70,9 +92,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Load and populate settings
   async function refreshUI() {
     try {
-      const settings: any = await invoke("get_settings");
-      const availableModels: any[] = await invoke("get_available_models");
-      const downloadedModels: string[] = await invoke("get_downloaded_models");
+      const settings = await invoke<AppSettings>("get_settings");
+      const availableModels = await invoke<ModelMetadata[]>("get_available_models");
+      const downloadedModels = await invoke<string[]>("get_downloaded_models");
 
       if (launchStartupToggle) {
         launchStartupToggle.checked = settings.launch_on_startup;
@@ -86,7 +108,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         hotkeyDisplay.innerText = settings.recording_shortcut;
       }
 
-      const version: string = await invoke("get_app_version");
+      const version = await invoke<string>("get_app_version");
       if (appVersionDisplay) {
         appVersionDisplay.innerText = `v${version}`;
       }
@@ -262,36 +284,54 @@ window.addEventListener("DOMContentLoaded", async () => {
   await refreshUI();
 
   // Auto-download tiny model if none exist (clean install)
-  const downloadedModels: string[] = await invoke("get_downloaded_models");
+  const downloadedModels = await invoke<string[]>("get_downloaded_models");
   if (downloadedModels.length === 0) {
-    await invoke("download_model", { model: "tiny" });
+    await invoke("download_model", { model: "tiny" }).catch(() => { });
   }
 
   // Event Listeners
   languageSelect.addEventListener("change", async () => {
-    await invoke("set_language", { lang: languageSelect.value });
-    statusText.innerText = "Language updated";
+    try {
+      await invoke("set_language", { lang: languageSelect.value });
+      statusText.innerText = "Language updated";
+    } catch (err) {
+      statusText.innerText = `Error: ${err}`;
+    }
   });
 
   launchStartupToggle.addEventListener("change", async () => {
-    await invoke("set_launch_on_startup", { enabled: launchStartupToggle.checked });
+    try {
+      await invoke("set_launch_on_startup", { enabled: launchStartupToggle.checked });
+    } catch (err) {
+      statusText.innerText = `Error: ${err}`;
+    }
   });
 
   maxRecordingInput.addEventListener("change", async () => {
     const value = parseInt(maxRecordingInput.value);
-    if (!isNaN(value) && value >= 10) {
-      await invoke("set_max_recording_duration", { duration: value });
-      statusText.innerText = "Recording limit updated";
+    if (!isNaN(value) && value >= 10 && value <= 3600) {
+      try {
+        await invoke("set_max_recording_duration", { duration: value });
+        statusText.innerText = "Recording limit updated";
+      } catch (err) {
+        statusText.innerText = `Error: ${err}`;
+      }
+    } else {
+      statusText.innerText = "Duration must be 10–3600 seconds";
     }
   });
 
   addLanguageBtn.addEventListener("click", async () => {
     const lang = availableLanguagesSelect.value;
     if (lang) {
-      await invoke("add_language", { lang });
-      await refreshUI();
-      availableLanguagesSelect.value = "";
-      statusText.innerText = "Language added";
+      try {
+        await invoke("add_language", { lang });
+        await refreshUI();
+        availableLanguagesSelect.value = "";
+        statusText.innerText = "Language added";
+      } catch (err) {
+        statusText.innerText = `Error: ${err}`;
+      }
     }
   });
 
@@ -300,9 +340,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (target.classList.contains("remove-btn")) {
       const lang = target.getAttribute("data-lang");
       if (lang) {
-        await invoke("remove_language", { lang });
-        await refreshUI();
-        statusText.innerText = "Language removed";
+        try {
+          await invoke("remove_language", { lang });
+          await refreshUI();
+          statusText.innerText = "Language removed";
+        } catch (err) {
+          statusText.innerText = `Error: ${err}`;
+        }
       }
     }
   });
@@ -313,18 +357,22 @@ window.addEventListener("DOMContentLoaded", async () => {
       const model = target.getAttribute("data-model");
       if (!model) return;
 
-      if (target.classList.contains("download-btn")) {
-        await invoke("download_model", { model });
-      } else if (target.classList.contains("use-btn")) {
-        await invoke("select_model", { model });
-        await refreshUI();
-        statusText.innerText = `Switched to ${model} model`;
-      } else if (target.classList.contains("delete-btn")) {
-        if (confirm(`Are you sure you want to delete the ${model} model?`)) {
-          await invoke("delete_model", { model });
+      try {
+        if (target.classList.contains("download-btn")) {
+          await invoke("download_model", { model });
+        } else if (target.classList.contains("use-btn")) {
+          await invoke("select_model", { model });
           await refreshUI();
-          statusText.innerText = `${model} model deleted`;
+          statusText.innerText = `Switched to ${model} model`;
+        } else if (target.classList.contains("delete-btn")) {
+          if (confirm(`Are you sure you want to delete the ${model} model?`)) {
+            await invoke("delete_model", { model });
+            await refreshUI();
+            statusText.innerText = `${model} model deleted`;
+          }
         }
+      } catch (err) {
+        statusText.innerText = `Error: ${err}`;
       }
     }
   });
@@ -339,8 +387,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   deviceSelect.addEventListener("change", async () => {
-    await invoke("set_device", { device: deviceSelect.value });
-    statusText.innerText = `Switched to ${deviceSelect.value.toUpperCase()}`;
+    try {
+      await invoke("set_device", { device: deviceSelect.value });
+      statusText.innerText = `Switched to ${deviceSelect.value.toUpperCase()}`;
+    } catch (err) {
+      statusText.innerText = `Error: ${err}`;
+    }
   });
 
   // Hotkey Recording Logic
