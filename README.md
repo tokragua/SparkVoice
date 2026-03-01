@@ -1,7 +1,7 @@
 # ✨ SparkVoice
 
-**Experience the future of universal dictation.**  
-SparkVoice is a high-performance, privacy-focused desktop application that brings OpenAI's Whisper models directly to your fingertips. Dictate into *any* application with zero-latency, multi-language auto-detection, and full GPU acceleration.
+**The essential vibe coding companion — dictate your thoughts, ship your code faster.**  
+SparkVoice is a high-performance, privacy-focused desktop dictation tool that every developer needs in their toolkit. Powered by OpenAI's Whisper models running entirely on your machine, it lets you dictate into *any* application with multi-language auto-detection and full GPU acceleration. No cloud, no latency, no excuses.
 
 ### Pill UI
 
