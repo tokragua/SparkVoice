@@ -5,6 +5,7 @@ use tauri::AppHandle;
 use tauri::Manager;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
 pub struct AppSettings {
     pub selected_language: String,
     pub languages: Vec<String>, // User's custom list of languages
@@ -17,6 +18,7 @@ pub struct AppSettings {
     pub recording_shortcut: String,
     pub max_recording_seconds: u32,
     pub pill_collapsed: bool,
+    pub show_pill: bool,
 }
 
 impl Default for AppSettings {
@@ -33,6 +35,7 @@ impl Default for AppSettings {
             recording_shortcut: "F2".to_string(),
             max_recording_seconds: 180,
             pill_collapsed: false,
+            show_pill: true,
         }
     }
 }

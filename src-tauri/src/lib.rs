@@ -215,7 +215,15 @@ pub fn run() {
 
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&settings_i, &quit_i])?;
+            let show_pill_i = tauri::menu::CheckMenuItem::with_id(
+                app,
+                "show_pill",
+                "Show Pill",
+                true,
+                settings.show_pill,
+                None::<&str>,
+            )?;
+            let menu = Menu::with_items(app, &[&show_pill_i, &settings_i, &quit_i])?;
 
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
@@ -230,6 +238,21 @@ pub fn run() {
                             let _ = window.set_focus();
                         }
                     }
+                    "show_pill" => {
+                        let state = app.state::<AppState>();
+                        let mut settings = state.settings.lock();
+                        settings.show_pill = !settings.show_pill;
+                        let is_showing = settings.show_pill;
+                        crate::settings::save_settings(app, &settings);
+                        drop(settings);
+                        if let Some(pill) = app.get_webview_window("pill") {
+                            if is_showing {
+                                let _ = pill.show();
+                            } else {
+                                let _ = pill.hide();
+                            }
+                        }
+                    }
                     _ => {}
                 })
                 .build(app)?;
@@ -242,7 +265,7 @@ pub fn run() {
                 }
             }
 
-            // Apply saved pill position
+            // Apply saved pill configure
             if let Some(pill) = app.get_webview_window("pill") {
                 let _ = pill.set_focusable(false);
                 let state = app.state::<AppState>();
@@ -251,6 +274,9 @@ pub fn run() {
                     settings.pill_x as i32,
                     settings.pill_y as i32,
                 ));
+                if !settings.show_pill {
+                    let _ = pill.hide();
+                }
             }
 
             Ok(())
