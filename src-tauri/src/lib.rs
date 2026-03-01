@@ -4,6 +4,7 @@ mod whisper;
 use crate::settings::{load_settings, save_settings, AppSettings};
 use crate::whisper::{capture_audio, list_input_devices, transcribe, WhisperState};
 use serde::{Deserialize, Serialize};
+use whisper_rs::WhisperContext;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelMetadata {
@@ -43,21 +44,31 @@ const AVAILABLE_MODELS: &[(&str, &str, &str)] = &[
     ("large-v3-turbo-q5_0", "547 MiB", "Quantized large-v3-turbo"),
 ];
 use enigo::{Enigo, Keyboard, Settings};
+use log::{error, info, warn};
 use std::sync::{mpsc, Arc, Mutex};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Emitter, Manager,
+    Emitter, Listener, Manager,
 };
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_autostart::ManagerExt;
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_log::{Target, TargetKind};
 
 struct AppState {
     whisper_state: Arc<Mutex<WhisperState>>,
     settings: Mutex<AppSettings>,
     device_tx: Mutex<mpsc::Sender<Option<String>>>,
     typer_tx: mpsc::Sender<String>,
+    is_transcribing: Mutex<bool>,
+    // (model_name, use_gpu, context)
+    model_cache: Mutex<Option<(String, bool, Arc<WhisperContext>)>>,
+}
+
+#[tauri::command]
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
 }
 
 #[tauri::command]
@@ -89,6 +100,34 @@ fn set_input_device(
 #[tauri::command]
 fn get_settings(state: tauri::State<'_, AppState>) -> AppSettings {
     state.settings.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn set_shortcut(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    shortcut_str: String,
+) -> Result<(), String> {
+    let new_shortcut: Shortcut = shortcut_str
+        .parse()
+        .map_err(|e| format!("Invalid shortcut: {}", e))?;
+
+    let mut settings = state.settings.lock().unwrap();
+    let old_shortcut_str = settings.recording_shortcut.clone();
+
+    // Unregister old shortcut if it exists
+    if let Ok(old_shortcut) = old_shortcut_str.parse::<Shortcut>() {
+        let _ = app.global_shortcut().unregister(old_shortcut);
+    }
+
+    // Register new shortcut
+    app.global_shortcut()
+        .register(new_shortcut)
+        .map_err(|e| format!("Failed to register shortcut: {}", e))?;
+
+    settings.recording_shortcut = shortcut_str;
+    save_settings(&app, &settings);
+    Ok(())
 }
 
 #[tauri::command]
@@ -150,128 +189,253 @@ fn set_device(
 
 #[tauri::command]
 fn toggle_recording(app: tauri::AppHandle, state: tauri::State<'_, AppState>) {
-    let mut ws = state.whisper_state.lock().unwrap();
-    ws.is_recording = !ws.is_recording;
-    let is_recording = ws.is_recording;
+    let is_recording = {
+        let mut ws = state.whisper_state.lock().unwrap();
+        ws.is_recording = !ws.is_recording;
+
+        if ws.is_recording {
+            // Set max samples based on settings
+            let settings = state.settings.lock().unwrap();
+            ws.max_samples = Some(settings.max_recording_seconds as usize * 16000);
+            ws.audio_buffer.clear(); // Clear buffer on start
+        }
+
+        ws.is_recording
+    };
 
     // Notify frontend with absolute state
     let _ = app.emit("recording-toggled", is_recording);
 
     if !is_recording {
-        // Stopped recording, start transcription
-        let audio_data = ws.audio_buffer.clone();
-        ws.audio_buffer.clear();
-        drop(ws); // Release lock during transcription
+        stop_and_transcribe(app.clone());
+    }
+}
 
-        let tx = state.typer_tx.clone();
-        let settings = state.settings.lock().unwrap().clone();
-        let app = app.clone(); // Clone app handle for the spawned thread
+fn stop_and_transcribe(app: tauri::AppHandle) {
+    let state = app.state::<AppState>();
 
-        std::thread::spawn(move || {
-            let model_name = &settings.selected_model;
-            let use_gpu = settings.device == "cuda";
+    // Check if we are already transcribing
+    let mut transcribing = state.is_transcribing.lock().unwrap();
+    if *transcribing {
+        warn!("Transcription already in progress, ignoring stop request.");
+        return;
+    }
+    *transcribing = true;
+    drop(transcribing);
 
-            // Safety check: English-only model with non-English language selected
-            if (settings.selected_language != "en" && settings.selected_language != "auto")
-                && model_name.ends_with(".en")
-            {
-                let _ = app.emit(
-                    "status-update",
-                    format!(
-                        "Warning: {} is English-only. Transcription may fail.",
-                        model_name
-                    ),
-                );
-            }
-            if settings.selected_language == "auto" && model_name.ends_with(".en") {
-                let _ = app.emit(
-                    "status-update",
-                    format!(
-                        "Warning: Auto-detect requires a multilingual model. {} is English-only.",
-                        model_name
-                    ),
-                );
-            }
+    let mut ws = state.whisper_state.lock().unwrap();
+    let audio_data = ws.audio_buffer.clone();
+    ws.audio_buffer.clear();
+    ws.is_recording = false; // Ensure it's off
+    drop(ws);
 
-            let model_filename = format!("ggml-{}.bin", model_name);
+    let tx = state.typer_tx.clone();
+    let settings = state.settings.lock().unwrap().clone();
+    let app_handle = app.clone(); // Clone app handle for the spawned thread
 
-            // Resolve model path in App Data directory for reliability
-            let model_dir = app
-                .path()
-                .app_data_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            if !model_dir.exists() {
-                let _ = std::fs::create_dir_all(&model_dir);
-            }
-            let model_path = model_dir.join(&model_filename);
+    std::thread::spawn(move || {
+        let state = app_handle.state::<AppState>();
+        let model_name = settings.selected_model.clone();
+        let use_gpu = settings.device == "cuda";
 
-            if !model_path.exists() {
-                // If not in App Data, check current/src-tauri for dev compatibility
-                let dev_path = std::path::PathBuf::from("src-tauri").join(&model_filename);
-                if dev_path.exists() {
-                    // Just use the dev path if it exists
-                    println!("Using dev model path: {:?}", dev_path);
-                    perform_transcription(
-                        &app,
-                        &tx,
-                        &dev_path,
-                        &audio_data,
-                        &settings.selected_language,
-                        &settings.languages,
-                        use_gpu,
-                    );
-                    return;
-                }
+        info!(
+            "Transcription started: model={}, device={}, audio_duration={:.2}s",
+            model_name,
+            if use_gpu { "CUDA" } else { "CPU" },
+            audio_data.len() as f32 / 16000.0
+        );
 
-                // Try to download it if truly missing
-                println!(
-                    "Required model {} missing. Attempting download...",
-                    model_filename
-                );
-                let _ = app.emit(
-                    "status-update",
-                    format!("Downloading {} model (75MB)...", model_name),
-                );
-
-                let url = format!(
-                    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin",
+        // Safety check: English-only model with non-English language selected
+        if (settings.selected_language != "en" && settings.selected_language != "auto")
+            && model_name.ends_with(".en")
+        {
+            let _ = app.emit(
+                "status-update",
+                format!(
+                    "Warning: {} is English-only. Transcription may fail.",
                     model_name
-                );
-                match reqwest::blocking::get(url) {
-                    Ok(mut response) if response.status().is_success() => {
-                        if let Ok(mut f) = std::fs::File::create(&model_path) {
-                            if let Ok(_) = std::io::copy(&mut response, &mut f) {
-                                println!("Download complete: {:?}", model_path);
-                                let _ = app
-                                    .emit("status-update", format!("{} model ready.", model_name));
-                            } else {
-                                eprintln!("Failed to write model file.");
-                            }
+                ),
+            );
+        }
+        if settings.selected_language == "auto" && model_name.ends_with(".en") {
+            let _ = app.emit(
+                "status-update",
+                format!(
+                    "Warning: Auto-detect requires a multilingual model. {} is English-only.",
+                    model_name
+                ),
+            );
+        }
+
+        let model_filename = format!("ggml-{}.bin", model_name);
+
+        // Resolve model path in App Data directory for reliability
+        let model_dir = app
+            .path()
+            .app_data_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        if !model_dir.exists() {
+            let _ = std::fs::create_dir_all(&model_dir);
+        }
+        let model_path = model_dir.join(&model_filename);
+
+        if !model_path.exists() {
+            // If not in App Data, check current/src-tauri for dev compatibility
+            let dev_path = std::path::PathBuf::from("src-tauri").join(&model_filename);
+            if dev_path.exists() {
+                // Just use the dev path if it exists
+                // Check cache or initialize for dev_path
+                let mut cache = state.model_cache.lock().unwrap();
+                let context: Option<Arc<WhisperContext>> =
+                    if let Some((cached_name, cached_gpu, ctx)) = &*cache {
+                        if cached_name == &model_name && *cached_gpu == use_gpu {
+                            Some(ctx.clone())
                         } else {
-                            eprintln!("Failed to create model file at {:?}", model_path);
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                let context = if let Some(ctx) = context {
+                    ctx
+                } else {
+                    let mut params = whisper_rs::WhisperContextParameters::default();
+                    params.use_gpu = use_gpu;
+                    match whisper_rs::WhisperContext::new_with_params(
+                        dev_path.to_str().unwrap(),
+                        params,
+                    ) {
+                        Ok(ctx) => {
+                            let arc_ctx = Arc::new(ctx);
+                            *cache = Some((model_name, use_gpu, arc_ctx.clone()));
+                            arc_ctx
+                        }
+                        Err(e) => {
+                            error!("Failed to create Whisper context: {}", e);
+                            let _ = app.emit("status-update", "Engine error.");
+                            return;
                         }
                     }
-                    Ok(response) => eprintln!("Download failed with status: {}", response.status()),
-                    Err(e) => eprintln!("Download request error: {}", e),
-                }
-            }
+                };
+                drop(cache);
 
-            if model_path.exists() {
                 perform_transcription(
                     &app,
                     &tx,
-                    &model_path,
+                    &context,
                     &audio_data,
                     &settings.selected_language,
                     &settings.languages,
-                    use_gpu,
                 );
-            } else {
-                eprintln!("Model not found at {:?}", model_path);
-                let _ = app.emit("status-update", "Model missing. Please check connection.");
+                return;
             }
-        });
-    }
+
+            // Try to download it if truly missing
+            info!(
+                "Required model {} missing. Attempting download...",
+                model_filename
+            );
+            let _ = app.emit(
+                "status-update",
+                format!("Downloading {} model (75MB)...", model_name),
+            );
+
+            let url = format!(
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin",
+                model_name
+            );
+            match reqwest::blocking::get(url) {
+                Ok(mut response) if response.status().is_success() => {
+                    match std::fs::File::create(&model_path) {
+                        Ok(mut f) => {
+                            if let Ok(_) = std::io::copy(&mut response, &mut f) {
+                                info!("Download complete: {:?}", model_path);
+                                let _ = app
+                                    .emit("status-update", format!("{} model ready.", model_name));
+                            } else {
+                                error!("Failed to write model file at {:?}", model_path);
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to create model file at {:?}: {}", model_path, e);
+                            let _ = app
+                                .emit("status-update", "Failed to create model file.".to_string());
+                        }
+                    }
+                }
+                Ok(response) => error!("Download failed with status: {}", response.status()),
+                Err(e) => error!("Download request error: {}", e),
+            }
+        }
+
+        if model_path.exists() {
+            // Check cache or initialize
+            let mut cache = state.model_cache.lock().unwrap();
+            let context = if let Some((cached_name, cached_gpu, ctx)) = &*cache {
+                if cached_name == &model_name && *cached_gpu == use_gpu {
+                    Some(ctx.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let context = if let Some(ctx) = context {
+                ctx
+            } else {
+                // Create new context
+                let mut params = whisper_rs::WhisperContextParameters::default();
+                params.use_gpu = use_gpu;
+                match whisper_rs::WhisperContext::new_with_params(
+                    model_path.to_str().unwrap(),
+                    params,
+                ) {
+                    Ok(ctx) => {
+                        let arc_ctx = Arc::new(ctx);
+                        *cache = Some((model_name, use_gpu, arc_ctx.clone()));
+                        arc_ctx
+                    }
+                    Err(e) => {
+                        error!("Failed to create Whisper context: {}", e);
+                        let _ = app.emit("status-update", "Engine error.");
+                        return;
+                    }
+                }
+            };
+            drop(cache); // Release lock before transcription
+
+            perform_transcription(
+                &app,
+                &tx,
+                &context,
+                &audio_data,
+                &settings.selected_language,
+                &settings.languages,
+            );
+
+            // Reset transcription guard
+            *state.is_transcribing.lock().unwrap() = false;
+        } else {
+            error!("Model not found at {:?}", model_path);
+            let _ = app.emit("status-update", "Model missing. Please check connection.");
+            // Reset transcription guard on error too
+            *state.is_transcribing.lock().unwrap() = false;
+        }
+    });
+}
+
+#[tauri::command]
+fn set_max_recording_duration(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    duration: u32,
+) -> Result<(), String> {
+    let mut settings = state.settings.lock().unwrap();
+    settings.max_recording_seconds = duration;
+    save_settings(&app, &settings);
+    Ok(())
 }
 
 #[tauri::command]
@@ -296,31 +460,24 @@ fn set_launch_on_startup(
 fn perform_transcription(
     app: &tauri::AppHandle,
     tx: &mpsc::Sender<String>,
-    model_path: &std::path::Path,
+    ctx: &whisper_rs::WhisperContext,
     audio_data: &[f32],
     lang: &str,
     allowed_langs: &[String],
-    use_gpu: bool,
 ) {
-    match transcribe(
-        model_path.to_str().unwrap(),
-        audio_data,
-        lang,
-        allowed_langs,
-        use_gpu,
-    ) {
+    match transcribe(ctx, audio_data, lang, allowed_langs) {
         Ok(text) => {
             let trimmed = text.trim();
             if !trimmed.is_empty()
                 && !trimmed.contains("[BLANK_AUDIO]")
                 && !trimmed.contains("[SILENCE]")
             {
-                println!("Transcribed text: {}", trimmed);
+                info!("Transcribed text: {}", trimmed);
                 let _ = tx.send(trimmed.to_string());
             }
         }
         Err(e) => {
-            eprintln!("Transcription error: {}", e);
+            error!("Transcription error: {}", e);
             let _ = app.emit("status-update", "Transcription error.");
         }
     }
@@ -405,7 +562,7 @@ fn download_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
         }
         let model_path = model_dir.join(&model_filename);
 
-        println!("Downloading model {}...", model);
+        info!("Downloading model {}...", model);
         let _ = app_clone.emit("model-download-status", format!("Downloading {}...", model));
 
         let url = format!(
@@ -416,7 +573,7 @@ fn download_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
             Ok(mut response) if response.status().is_success() => {
                 if let Ok(mut f) = std::fs::File::create(&model_path) {
                     if let Ok(_) = std::io::copy(&mut response, &mut f) {
-                        println!("Download complete: {:?}", model_path);
+                        info!("Download complete: {:?}", model_path);
                         let _ = app_clone.emit("model-download-status", "ready".to_string());
                     } else {
                         let _ = app_clone
@@ -443,9 +600,60 @@ fn start_dragging(window: tauri::Window) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(unused_variables, unused_assignments)]
 pub fn run() {
+    // Custom logging callback for whisper.cpp (must be C-compatible)
+    unsafe extern "C" fn whisper_log_callback(
+        level: i32,
+        message: *const std::ffi::c_char,
+        _user_data: *mut std::ffi::c_void,
+    ) {
+        if message.is_null() {
+            return;
+        }
+        let c_str = std::ffi::CStr::from_ptr(message);
+        let msg = c_str.to_string_lossy();
+        let trimmed = msg.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+
+        // whisper.cpp log levels: 0=error, 1=warn, 2=info, 3=debug
+        match level {
+            0 => error!("[whisper.cpp] {}", trimmed),
+            1 => warn!("[whisper.cpp] {}", trimmed),
+            2 => info!("[whisper.cpp] {}", trimmed),
+            _ => info!("[whisper.cpp] {}", trimmed), // Treat debug as info for now
+        }
+    }
+    unsafe {
+        whisper_rs::set_log_callback(Some(whisper_log_callback), std::ptr::null_mut());
+    }
+
     let (tx, _rx) = mpsc::channel::<Option<String>>();
 
+    #[cfg(target_os = "windows")]
+    let log_dir = std::env::var("APPDATA")
+        .map(|p| {
+            std::path::PathBuf::from(p)
+                .join("com.sparkvoice.app")
+                .join("logs")
+        })
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    #[cfg(not(target_os = "windows"))]
+    let log_dir = std::path::PathBuf::from(".");
+
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::Folder {
+                        path: log_dir,
+                        file_name: None,
+                    }),
+                    Target::new(TargetKind::Webview),
+                ])
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec![]),
@@ -457,9 +665,15 @@ pub fn run() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        if shortcut.key == Code::F2 {
-                            let state = app.state::<AppState>();
-                            toggle_recording(app.clone(), state);
+                        let state = app.state::<AppState>();
+                        let settings = state.settings.lock().unwrap();
+                        if let Ok(current_shortcut) =
+                            settings.recording_shortcut.parse::<Shortcut>()
+                        {
+                            if shortcut == &current_shortcut {
+                                drop(settings);
+                                toggle_recording(app.clone(), state);
+                            }
                         }
                     }
                 })
@@ -473,6 +687,7 @@ pub fn run() {
                     is_recording: false,
                     audio_buffer: Vec::new(),
                     current_amplitude: 0.0,
+                    max_samples: Some(settings.max_recording_seconds as usize * 16000),
                 })),
                 settings: Mutex::new(settings.clone()),
                 device_tx: Mutex::new(tx),
@@ -487,6 +702,18 @@ pub fn run() {
                     });
                     typer_tx
                 },
+                model_cache: Mutex::new(None),
+                is_transcribing: Mutex::new(false),
+            });
+
+            // Log system capabilities for performance debugging
+            info!("Whisper System Info: {}", whisper_rs::print_system_info());
+
+            let app_handle_for_listener = app.handle().clone();
+            app.listen("recording-auto-stopped", move |_| {
+                info!("Automatic recording stop triggered by limit.");
+                stop_and_transcribe(app_handle_for_listener.clone());
+                let _ = app_handle_for_listener.emit("recording-toggled", false);
             });
 
             let state = app.state::<AppState>();
@@ -499,33 +726,41 @@ pub fn run() {
             let whisper_state_for_audio = whisper_state.clone();
             let initial_device = settings.input_device.clone();
 
+            let app_handle_for_audio = app.handle().clone();
             std::thread::spawn(move || {
                 let mut current_stream: Option<cpal::Stream> = None;
 
                 // Initialize with saved device or default
-                if let Ok(stream) = capture_audio(whisper_state_for_audio.clone(), initial_device) {
+                if let Ok(stream) = capture_audio(
+                    app_handle_for_audio.clone(),
+                    whisper_state_for_audio.clone(),
+                    initial_device,
+                ) {
                     current_stream = Some(stream);
                 }
 
                 while let Ok(device_name) = device_rx.recv() {
                     current_stream = None; // Drop old stream
-                    if let Ok(stream) = capture_audio(whisper_state_for_audio.clone(), device_name)
-                    {
+                    if let Ok(stream) = capture_audio(
+                        app_handle_for_audio.clone(),
+                        whisper_state_for_audio.clone(),
+                        device_name,
+                    ) {
                         current_stream = Some(stream);
                     }
                 }
             });
 
             // Stream amplitude to pill UI
-            let app_handle = app.handle().clone();
             let whisper_state_for_amp = state.whisper_state.clone();
+            let app_handle_for_amp = app.handle().clone();
             std::thread::spawn(move || loop {
                 let mut ws = whisper_state_for_amp.lock().unwrap();
                 let amp = ws.current_amplitude;
                 ws.current_amplitude = 0.0; // Reset for peak detection
                 drop(ws);
 
-                let _ = app_handle.emit("audio-amplitude", amp);
+                let _ = app_handle_for_amp.emit("audio-amplitude", amp);
                 std::thread::sleep(std::time::Duration::from_millis(50));
             });
 
@@ -550,12 +785,12 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Register F2 shortcut
-            if let Err(e) = app
-                .global_shortcut()
-                .register(Shortcut::new(None, Code::F2))
-            {
-                println!("Failed to register F2 shortcut: {}", e);
+            // Register shortcut from settings
+            let shortcut_str = settings.recording_shortcut.clone();
+            if let Ok(shortcut) = shortcut_str.parse::<Shortcut>() {
+                if let Err(e) = app.global_shortcut().register(shortcut) {
+                    error!("Failed to register shortcut {}: {}", shortcut_str, e);
+                }
             }
 
             // Apply saved pill position
@@ -604,6 +839,9 @@ pub fn run() {
             download_model,
             set_device,
             set_launch_on_startup,
+            set_shortcut,
+            set_max_recording_duration,
+            get_app_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

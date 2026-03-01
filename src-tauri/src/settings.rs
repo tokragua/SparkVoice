@@ -14,6 +14,8 @@ pub struct AppSettings {
     pub pill_y: f32,
     pub selected_model: String,
     pub launch_on_startup: bool,
+    pub recording_shortcut: String,
+    pub max_recording_seconds: u32,
 }
 
 impl Default for AppSettings {
@@ -27,6 +29,8 @@ impl Default for AppSettings {
             pill_y: 100.0,
             selected_model: "tiny".to_string(),
             launch_on_startup: false,
+            recording_shortcut: "F2".to_string(),
+            max_recording_seconds: 180,
         }
     }
 }

@@ -1,12 +1,15 @@
 use anyhow::Result;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use log::{error, info, warn};
 use std::sync::{Arc, Mutex};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use tauri::Emitter;
+use whisper_rs::{FullParams, SamplingStrategy, WhisperContext};
 
 pub struct WhisperState {
     pub is_recording: bool,
-    pub audio_buffer: Vec<f32>, // This will store 16kHz mono audio
+    pub audio_buffer: Vec<f32>,
     pub current_amplitude: f32,
+    pub max_samples: Option<usize>,
 }
 
 pub fn list_input_devices() -> Vec<String> {
@@ -16,6 +19,7 @@ pub fn list_input_devices() -> Vec<String> {
 }
 
 pub fn capture_audio(
+    app_handle: tauri::AppHandle,
     state: Arc<Mutex<WhisperState>>,
     device_name: Option<String>,
 ) -> Result<cpal::Stream> {
@@ -36,7 +40,7 @@ pub fn capture_audio(
     let sample_rate = config.sample_rate().0 as f32;
     let channels = config.channels() as usize;
 
-    println!(
+    info!(
         "Capturing audio: {}Hz, {} channels, format {:?}",
         sample_rate, channels, sample_format
     );
@@ -44,17 +48,17 @@ pub fn capture_audio(
     let stream = match sample_format {
         cpal::SampleFormat::F32 => device.build_input_stream(
             &config.into(),
-            move |data: &[f32], _| process_audio(data, &state, sample_rate, channels),
-            |err| eprintln!("Audio capture error: {}", err),
+            move |data: &[f32], _| process_audio(data, &state, sample_rate, channels, &app_handle),
+            |err| error!("Audio capture error: {}", err),
             None,
         )?,
         cpal::SampleFormat::I16 => device.build_input_stream(
             &config.into(),
             move |data: &[i16], _| {
                 let f32_data: Vec<f32> = data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
-                process_audio(&f32_data, &state, sample_rate, channels)
+                process_audio(&f32_data, &state, sample_rate, channels, &app_handle)
             },
-            |err| eprintln!("Audio capture error: {}", err),
+            |err| error!("Audio capture error: {}", err),
             None,
         )?,
         cpal::SampleFormat::U16 => device.build_input_stream(
@@ -64,9 +68,9 @@ pub fn capture_audio(
                     .iter()
                     .map(|&s| (s as f32 - u16::MAX as f32 / 2.0) / (u16::MAX as f32 / 2.0))
                     .collect();
-                process_audio(&f32_data, &state, sample_rate, channels)
+                process_audio(&f32_data, &state, sample_rate, channels, &app_handle)
             },
-            |err| eprintln!("Audio capture error: {}", err),
+            |err| error!("Audio capture error: {}", err),
             None,
         )?,
         _ => return Err(anyhow::anyhow!("Unsupported sample format")),
@@ -81,6 +85,7 @@ fn process_audio(
     state: &Arc<Mutex<WhisperState>>,
     sample_rate: f32,
     channels: usize,
+    app_handle: &tauri::AppHandle,
 ) {
     let mut s = state.lock().unwrap();
 
@@ -126,22 +131,38 @@ fn process_audio(
                 i += ratio;
             }
         }
+
+        // Safety: Dynamic Recording Limit
+        let limit = s.max_samples.unwrap_or(480_000); // Default 30s if not set
+        if s.audio_buffer.len() >= limit {
+            s.is_recording = false;
+            let seconds = limit / 16000;
+            warn!(
+                "Recording limit reached ({}s). Stopping automatically.",
+                seconds
+            );
+            let _ = app_handle.emit("recording-auto-stopped", ());
+        }
     }
 }
 
 pub fn transcribe(
-    model_path: &str,
+    ctx: &WhisperContext,
     audio_data: &[f32],
     lang: &str,
     allowed_langs: &[String],
-    use_gpu: bool,
 ) -> Result<String> {
-    let mut params = WhisperContextParameters::default();
-    params.use_gpu = use_gpu;
-    let ctx = WhisperContext::new_with_params(model_path, params)?;
     let mut state = ctx.create_state()?;
 
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 5 });
+    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+
+    // Optimize CPU performance with multi-threading
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let threads = std::cmp::min(threads, 8) as i32; // Cap at 8 threads to avoid contention
+    params.set_n_threads(threads);
+
     if lang == "auto" {
         params.set_language(None);
     } else {
@@ -152,12 +173,19 @@ pub fn transcribe(
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
 
+    info!("Processing transcription with {} CPU threads...", threads);
+    let start = std::time::Instant::now();
     state.full(params, audio_data)?;
+    let duration = start.elapsed();
+    info!(
+        "Transcription compute finished in {:.2}s",
+        duration.as_secs_f32()
+    );
 
     if lang == "auto" && !allowed_langs.is_empty() {
         if let Ok(id) = state.full_lang_id_from_state() {
             if let Some(detected_lang) = whisper_rs::get_lang_str(id) {
-                println!("Detected language: {}", detected_lang);
+                info!("Detected language: {}", detected_lang);
                 if !allowed_langs.contains(&detected_lang.to_string()) {
                     let fallback_lang = allowed_langs
                         .iter()
@@ -165,12 +193,13 @@ pub fn transcribe(
                         .cloned()
                         .unwrap_or_else(|| allowed_langs[0].clone());
 
-                    println!(
+                    info!(
                         "Detected language '{}' not allowed. Forcing fallback: {}",
                         detected_lang, fallback_lang
                     );
 
-                    let mut retry_params = FullParams::new(SamplingStrategy::Greedy { best_of: 5 });
+                    let mut retry_params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+                    retry_params.set_n_threads(threads); // Keep same thread count
                     retry_params.set_language(Some(&fallback_lang));
                     retry_params.set_print_special(false);
                     retry_params.set_print_progress(false);

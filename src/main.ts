@@ -17,10 +17,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   const myLanguagesList = document.getElementById("my-languages-list") as HTMLUListElement;
   const addLanguageBtn = document.getElementById("add-language-btn") as HTMLButtonElement;
   const launchStartupToggle = document.getElementById("launch-startup-toggle") as HTMLInputElement;
+  const maxRecordingInput = document.getElementById("max-recording-input") as HTMLInputElement;
   const statusText = document.getElementById("status-text") as HTMLElement;
 
   const modelList = document.getElementById("model-list") as HTMLElement;
   const modelStatus = document.getElementById("model-status") as HTMLElement;
+
+  const hotkeyDisplay = document.getElementById("hotkey-display") as HTMLElement;
+  const appVersionDisplay = document.getElementById("app-version") as HTMLElement;
+  let isRecordingHotkey = false;
 
   const sidebarNav = document.getElementById("sidebar-nav") as HTMLElement;
   const sections = document.querySelectorAll(".content-section");
@@ -71,6 +76,19 @@ window.addEventListener("DOMContentLoaded", async () => {
 
       if (launchStartupToggle) {
         launchStartupToggle.checked = settings.launch_on_startup;
+      }
+
+      if (maxRecordingInput) {
+        maxRecordingInput.value = settings.max_recording_seconds.toString();
+      }
+
+      if (hotkeyDisplay) {
+        hotkeyDisplay.innerText = settings.recording_shortcut;
+      }
+
+      const version: string = await invoke("get_app_version");
+      if (appVersionDisplay) {
+        appVersionDisplay.innerText = `v${version}`;
       }
 
       // Populate active language dropdown
@@ -173,6 +191,14 @@ window.addEventListener("DOMContentLoaded", async () => {
     await invoke("set_launch_on_startup", { enabled: launchStartupToggle.checked });
   });
 
+  maxRecordingInput.addEventListener("change", async () => {
+    const value = parseInt(maxRecordingInput.value);
+    if (!isNaN(value) && value >= 10) {
+      await invoke("set_max_recording_duration", { duration: value });
+      statusText.innerText = "Recording limit updated";
+    }
+  });
+
   addLanguageBtn.addEventListener("click", async () => {
     const lang = availableLanguagesSelect.value;
     if (lang) {
@@ -229,5 +255,49 @@ window.addEventListener("DOMContentLoaded", async () => {
   deviceSelect.addEventListener("change", async () => {
     await invoke("set_device", { device: deviceSelect.value });
     statusText.innerText = `Switched to ${deviceSelect.value.toUpperCase()}`;
+  });
+
+  // Hotkey Recording Logic
+  hotkeyDisplay.addEventListener("click", () => {
+    isRecordingHotkey = true;
+    hotkeyDisplay.innerText = "...";
+    hotkeyDisplay.classList.add("ring-2", "ring-primary", "animate-pulse");
+  });
+
+  window.addEventListener("keydown", async (e: KeyboardEvent) => {
+    if (!isRecordingHotkey) return;
+
+    // Prevent default browser behavior (e.g., F2 for rename)
+    e.preventDefault();
+
+    const modifiers: string[] = [];
+    if (e.ctrlKey || e.metaKey) modifiers.push("CommandOrControl");
+    if (e.altKey) modifiers.push("Alt");
+    if (e.shiftKey) modifiers.push("Shift");
+
+    const key = e.key.toUpperCase();
+
+    // Ignore if only a modifier was pressed
+    if (["CONTROL", "ALT", "SHIFT", "META", "OS"].includes(key)) return;
+
+    // Normalizing F keys and other special keys
+    let finalKey = e.key;
+    if (e.key === " ") finalKey = "Space";
+    else if (e.key.length === 1) finalKey = e.key.toUpperCase();
+
+    // Construct shortcut string
+    const shortcutStr = [...modifiers, finalKey].join("+");
+
+    try {
+      await invoke("set_shortcut", { shortcutStr });
+      hotkeyDisplay.innerText = shortcutStr;
+      statusText.innerText = "Shortcut updated";
+    } catch (err: any) {
+      statusText.innerText = `Error: ${err}`;
+      await refreshUI(); // Revert to current setting
+    } finally {
+      isRecordingHotkey = false;
+      hotkeyDisplay.classList.remove("ring-2", "ring-primary", "animate-pulse");
+    }
   });
 });

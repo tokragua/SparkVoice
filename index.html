@@ -51,7 +51,8 @@
           <h1 class="text-white text-lg font-bold leading-tight tracking-tight">SparkVoice</h1>
           <div class="flex items-center gap-2">
             <span class="inline-block size-2 rounded-full bg-primary animate-pulse"></span>
-            <p class="text-[#9cbaa6] text-xs font-medium uppercase tracking-wider">v1.0.0</p>
+            <span id="app-version"
+              class="text-[#9cbaa6] text-xs font-medium px-2 py-1 bg-white/5 rounded-full">v0.1.0</span>
           </div>
         </div>
       </div>
@@ -128,6 +129,27 @@
                 class="w-14 h-7 bg-[#28392e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-[0_0_10px_rgba(13,242,89,0.5)]">
               </div>
             </label>
+          </div>
+
+          <div
+            class="glass-panel rounded-2xl p-5 flex items-center justify-between group hover:border-primary/30 transition-all duration-300">
+            <div class="flex items-center gap-5">
+              <div
+                class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                <span class="material-symbols-outlined text-[24px]">timer</span>
+              </div>
+              <div class="flex flex-col">
+                <p class="text-white text-lg font-semibold group-hover:text-primary transition-colors">Max Recording
+                  Duration
+                </p>
+                <p class="text-[#9cbaa6] text-sm">Automatically stop and transcribe after this many seconds.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <input type="number" id="max-recording-input" min="10" max="3600"
+                class="w-24 bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-3 py-2 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-center font-bold">
+              <span class="text-[#9cbaa6] text-sm font-medium">sec</span>
+            </div>
           </div>
         </section>
 
@@ -244,9 +266,9 @@
                 <p class="text-[#9cbaa6] text-sm">Start or stop voice capture.</p>
               </div>
             </div>
-            <div class="flex items-center gap-3">
-              <kbd class="px-4 py-2 bg-[#28392e] rounded-lg text-primary font-bold border border-[#3a5242]">F2</kbd>
-              <span class="text-[#9cbaa6] text-xs font-light">(Customization coming soon)</span>
+            <div class="flex items-center pr-2 shrink-0">
+              <kbd id="hotkey-display"
+                class="px-4 py-2 bg-[#28392e] rounded-lg text-primary font-bold border border-[#3a5242] cursor-pointer hover:bg-[#3a5242] transition-all select-none min-w-[80px] text-center shadow-lg whitespace-nowrap">F2</kbd>
             </div>
           </div>
         </section>
