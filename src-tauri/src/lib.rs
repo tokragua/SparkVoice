@@ -781,6 +781,7 @@ pub fn run() {
 
             // Apply saved pill position
             if let Some(pill) = app.get_webview_window("pill") {
+                let _ = pill.set_focusable(false);
                 let state = app.state::<AppState>();
                 let settings = state.settings.lock().unwrap();
                 let _ = pill.set_position(tauri::PhysicalPosition::new(
