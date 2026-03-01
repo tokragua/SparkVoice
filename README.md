@@ -5,9 +5,9 @@ SparkVoice is a high-performance, privacy-focused desktop dictation tool that ev
 
 ### Pill UI
 
-| Idle | Listening | Working |
-|------|-----------|---------|
-| ![Pill Idle](screenshots/pill-idle.png) | ![Pill Listening](screenshots/pill-listening.png) | ![Pill Working](screenshots/pill-working.png) |
+| Idle | Listening | Working | Compact |
+|------|-----------|---------|---------|
+| ![Pill Idle](screenshots/pill-idle.png) | ![Pill Listening](screenshots/pill-listening.png) | ![Pill Working](screenshots/pill-working.png) | ![Pill Compact](screenshots/pill-compact.png) |
 
 ### Settings
 
