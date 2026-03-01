@@ -50,11 +50,14 @@ npm install
 
 ### 3. Run in Development Mode
 To start the app with local debugging:
+
 ```powershell
-# For CPU-only mode:
+# 1. Standard Mode (Highly Portable / CPU-only)
+# Best for development on all hardware (Intel/AMD/NVIDIA).
 npm run tauri dev
 
-# For GPU (CUDA) mode:
+# 2. Performance Mode (NVIDIA GPU / CUDA)
+# Best for testing GPU acceleration. Requires CUDA Toolkit.
 $env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
 npm run tauri dev -- --features cuda
 ```
@@ -65,17 +68,24 @@ npm run tauri dev -- --features cuda
 
 To generate a production-ready installer:
 
-### Standard Build (CPU)
+### Standard Build (CPU-Only / Default)
+This build is highly portable and works on any Windows machine regardless of GPU.
 ```powershell
 npm run tauri build
 ```
 
 ### High-Performance Build (GPU/CUDA)
-*Note: This requires the CUDA Toolset files to be correctly placed in your MSVC BuildCustomizations folder.*
+This build enables hardware acceleration but requires the user to have an NVIDIA GPU and the CUDA Toolkit installed for compilation.
 ```powershell
+# Set LLVM Path for Bindings
 $env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
-cargo tauri build --features cuda
+
+# Build with CUDA Feature
+npm run tauri build -- --features cuda
 ```
+
+> [!TIP]
+> **Troubleshooting CUDA Builds**: If you see "Unresolved Externals" linker errors, ensure your `CUDA_PATH` environment variable is set correctly and that `LLVM` is installed and in your `PATH`.
 
 The output will be located in: `src-tauri/target/release/bundle/msi/`
 

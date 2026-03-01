@@ -62,6 +62,7 @@ struct AppState {
     device_tx: Mutex<mpsc::Sender<Option<String>>>,
     typer_tx: mpsc::Sender<String>,
     is_transcribing: Mutex<bool>,
+    is_cancelled: Arc<AtomicBool>,
     // (model_name, use_gpu, context)
     model_cache: Mutex<Option<(String, bool, Arc<WhisperContext>)>>,
 }
@@ -597,6 +598,17 @@ fn start_dragging(window: tauri::Window) {
     let _ = window.start_dragging();
 }
 
+#[tauri::command]
+fn is_cuda_supported() -> bool {
+    cfg!(feature = "cuda")
+}
+
+#[tauri::command]
+fn cancel_transcription(state: tauri::State<'_, AppState>) {
+    state.is_cancelled.store(true, Ordering::SeqCst);
+    info!("Transcription cancellation requested.");
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(unused_variables, unused_assignments)]
 pub fn run() {
@@ -842,6 +854,8 @@ pub fn run() {
             set_shortcut,
             set_max_recording_duration,
             get_app_version,
+            is_cuda_supported,
+            cancel_transcription,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

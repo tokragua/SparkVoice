@@ -13,6 +13,16 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.015;
+  pointer-events: none;
+  z-index: 9999;
+}
+
 /* Custom scrollbar for Webkit browsers */
 ::-webkit-scrollbar {
   width: 8px;
@@ -33,10 +43,11 @@
 
 /* Glass morphism effect utility */
 .glass-panel {
-  background: rgba(26, 38, 30, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(26, 38, 30, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 }
 
 .content-section.hidden {
@@ -71,9 +82,9 @@
 }
 
 .nav-item.active {
-  background-color: #0df259;
+  background: linear-gradient(135deg, #0df259, #0bbd4a);
   color: #102216 !important;
-  box-shadow: 0 0 15px rgba(13, 242, 89, 0.3);
+  box-shadow: 0 4px 12px rgba(13, 242, 89, 0.2);
 }
 
 .nav-item.active span {

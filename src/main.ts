@@ -148,6 +148,27 @@ window.addEventListener("DOMContentLoaded", async () => {
       });
 
       // Populate device and microphone
+      // Populate device and compute device
+      const isCudaSupported: boolean = await invoke("is_cuda_supported");
+      const cudaOption = deviceSelect.querySelector('option[value="cuda"]');
+
+      if (!isCudaSupported) {
+        if (cudaOption) {
+          cudaOption.remove();
+        }
+        // If current setting is cuda but not supported, fall back to cpu
+        if (settings.device === "cuda") {
+          settings.device = "cpu";
+          await invoke("set_device", { device: "cpu" });
+        }
+      } else if (!cudaOption) {
+        // Re-add if it was previously removed but now supported
+        const option = document.createElement("option");
+        option.value = "cuda";
+        option.text = "CUDA GPU";
+        deviceSelect.prepend(option);
+      }
+
       deviceSelect.value = settings.device;
       const devices: string[] = await invoke("get_input_devices");
       audioInputSelect.innerHTML = '<option value="">Default System Microphone</option>';
