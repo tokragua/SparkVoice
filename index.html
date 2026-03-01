@@ -56,6 +56,12 @@
           <span class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">keyboard</span>
           <span class="text-sm font-medium">Hotkeys</span>
         </a>
+        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] transition-all group" href="#"
+          data-section="stats">
+          <span
+            class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">bar_chart</span>
+          <span class="text-sm font-medium">Statistics</span>
+        </a>
       </nav>
     </div>
     <!-- Bottom Sidebar -->
@@ -242,6 +248,77 @@
             <div class="flex items-center pr-2 shrink-0">
               <kbd id="hotkey-display"
                 class="px-4 py-2 bg-[#28392e] rounded-lg text-primary font-bold border border-[#3a5242] cursor-pointer hover:bg-[#3a5242] transition-all select-none min-w-[80px] text-center shadow-lg whitespace-nowrap">F2</kbd>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section: Stats -->
+        <section id="section-stats" class="content-section hidden flex flex-col gap-4">
+          <div class="flex flex-col gap-2 mb-4">
+            <h2 class="text-4xl font-bold text-white tracking-tight">Statistics</h2>
+            <p class="text-[#9cbaa6] text-lg font-light">Your SparkVoice usage at a glance.</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- Total Words -->
+            <div
+              class="glass-panel rounded-2xl p-6 flex flex-col gap-3 group hover:border-primary/30 transition-all duration-300">
+              <div class="flex items-center gap-3">
+                <div
+                  class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                  <span class="material-symbols-outlined">text_fields</span>
+                </div>
+                <div class="flex flex-col">
+                  <p class="text-[#9cbaa6] text-xs font-bold uppercase tracking-widest">Total Words</p>
+                  <p id="stat-total-words" class="text-white text-3xl font-bold">0</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Total Dictations -->
+            <div
+              class="glass-panel rounded-2xl p-6 flex flex-col gap-3 group hover:border-primary/30 transition-all duration-300">
+              <div class="flex items-center gap-3">
+                <div
+                  class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                  <span class="material-symbols-outlined">mic</span>
+                </div>
+                <div class="flex flex-col">
+                  <p class="text-[#9cbaa6] text-xs font-bold uppercase tracking-widest">Total Dictations</p>
+                  <p id="stat-total-transcriptions" class="text-white text-3xl font-bold">0</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dictation Time -->
+            <div
+              class="glass-panel rounded-2xl p-6 flex flex-col gap-3 group hover:border-primary/30 transition-all duration-300">
+              <div class="flex items-center gap-3">
+                <div
+                  class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                  <span class="material-symbols-outlined">timer</span>
+                </div>
+                <div class="flex flex-col">
+                  <p class="text-[#9cbaa6] text-xs font-bold uppercase tracking-widest">Dictation Time</p>
+                  <p id="stat-dictation-time" class="text-white text-3xl font-bold">0m</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Time Saved -->
+            <div
+              class="glass-panel rounded-2xl p-6 flex flex-col gap-3 group hover:border-primary/30 transition-all duration-300">
+              <div class="flex items-center gap-3">
+                <div
+                  class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                  <span class="material-symbols-outlined">rocket_launch</span>
+                </div>
+                <div class="flex flex-col">
+                  <p class="text-[#9cbaa6] text-xs font-bold uppercase tracking-widest">Time Saved</p>
+                  <p id="stat-time-saved" class="text-white text-3xl font-bold">0m</p>
+                  <p class="text-[#9cbaa6] text-xs">vs. typing at 40 WPM</p>
+                </div>
+              </div>
             </div>
           </div>
         </section>

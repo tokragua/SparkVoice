@@ -2,6 +2,7 @@ mod commands;
 mod errors;
 mod models;
 mod settings;
+mod stats;
 mod whisper;
 
 use crate::commands::*;
@@ -334,6 +335,7 @@ pub fn run() {
             cancel_transcription,
             open_settings,
             set_pill_collapsed,
+            get_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

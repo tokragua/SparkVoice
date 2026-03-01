@@ -9,6 +9,7 @@ use crate::AppState;
 use crate::errors::AppError;
 use crate::models::{download_model_to_path, get_model_size_display, validate_model_name};
 use crate::settings::{save_settings, AppSettings};
+use crate::stats::{self, AppStats};
 use crate::whisper::{list_input_devices, transcribe};
 
 // ── Utility Commands ────────────────────────────────────────────────────────
@@ -49,6 +50,11 @@ pub fn open_settings(app: tauri::AppHandle) {
 pub fn cancel_transcription(state: tauri::State<'_, AppState>) {
     state.is_cancelled.store(true, Ordering::SeqCst);
     info!("Transcription cancellation requested.");
+}
+
+#[tauri::command]
+pub fn get_stats(app: tauri::AppHandle) -> AppStats {
+    stats::load_stats(&app)
 }
 
 // ── Settings Commands ───────────────────────────────────────────────────────
@@ -404,6 +410,7 @@ fn perform_transcription(
     allowed_langs: &[String],
     is_cancelled: Arc<AtomicBool>,
 ) {
+    let audio_duration_seconds = audio_data.len() as f64 / 16000.0;
     match transcribe(ctx, audio_data, lang, allowed_langs, is_cancelled) {
         Ok(text) => {
             let trimmed = text.trim();
@@ -414,6 +421,8 @@ fn perform_transcription(
                 info!("Transcribed text: {}", trimmed);
                 let _ = app.emit("transcribed-text", trimmed.to_string());
                 let _ = tx.send(trimmed.to_string());
+                // Record usage statistics
+                stats::record_transcription(app, trimmed, audio_duration_seconds);
             }
         }
         Err(e) => {

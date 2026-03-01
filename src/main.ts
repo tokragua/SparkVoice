@@ -23,6 +23,13 @@ interface ModelMetadata {
   description: string;
 }
 
+/** Mirrors the Rust AppStats struct */
+interface AppStats {
+  total_words: number;
+  total_dictation_seconds: number;
+  total_transcriptions: number;
+}
+
 const WHISPER_LANGUAGES = [
   "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar", "sv", "it", "id", "hi", "fi", "vi", "he", "uk", "el", "ms", "cs", "ro", "da", "hu", "ta", "no", "th", "ur", "hr", "bg", "lt", "la", "mi", "ml", "cy", "sk", "te", "fa", "lv", "bn", "sr", "az", "sl", "kn", "et", "mk", "br", "eu", "is", "hy", "ne", "mn", "bs", "kk", "sq", "sw", "gl", "mr", "pa", "si", "km", "sn", "yo", "so", "af", "oc", "ka", "be", "tg", "sd", "gu", "am", "yi", "lo", "uz", "fo", "ht", "ps", "tk", "nn", "mt", "sa", "lb", "my", "bo", "tl", "mg", "as", "tt", "haw", "ln", "ha", "ba", "jw", "su"
 ];
@@ -75,11 +82,49 @@ window.addEventListener("DOMContentLoaded", async () => {
         section.classList.add("hidden");
       }
     });
+
+    // Auto-load stats when switching to stats tab
+    if (sectionId === "stats") {
+      loadStats();
+    }
   });
 
   listen("status-update", (event: any) => {
     statusText.innerText = event.payload as string;
   });
+
+  function formatDuration(totalSeconds: number): string {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m`;
+    return `${Math.floor(totalSeconds)}s`;
+  }
+
+  async function loadStats() {
+    try {
+      const stats = await invoke<AppStats>("get_stats");
+
+      const totalWordsEl = document.getElementById("stat-total-words");
+      const totalTranscriptionsEl = document.getElementById("stat-total-transcriptions");
+      const dictationTimeEl = document.getElementById("stat-dictation-time");
+      const timeSavedEl = document.getElementById("stat-time-saved");
+
+      if (totalWordsEl) totalWordsEl.innerText = stats.total_words.toLocaleString();
+      if (totalTranscriptionsEl) totalTranscriptionsEl.innerText = stats.total_transcriptions.toLocaleString();
+      if (dictationTimeEl) dictationTimeEl.innerText = formatDuration(stats.total_dictation_seconds);
+
+      // Time saved calculation: average typist = 40 WPM
+      // Time it would take to type the words: total_words / 40 minutes
+      // Time it actually took to dictate: total_dictation_seconds
+      // Time saved = typing_time - dictation_time
+      const typingTimeSeconds = (stats.total_words / 40) * 60;
+      const timeSavedSeconds = Math.max(0, typingTimeSeconds - stats.total_dictation_seconds);
+      if (timeSavedEl) timeSavedEl.innerText = formatDuration(timeSavedSeconds);
+    } catch (err) {
+      console.error("Failed to load stats:", err);
+    }
+  }
 
   listen("model-download-status", (event: any) => {
     modelStatus.innerText = event.payload as string;
