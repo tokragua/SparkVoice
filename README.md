@@ -13,16 +13,27 @@ SparkVoice is a high-performance, privacy-focused desktop dictation tool that ev
 
 ![Settings Panel](screenshots/settings.png)
 
+### Statistics
+
+![Statistics](screenshots/statistics.png)
+
+### Network API
+
+![Network API](screenshots/api.png)
+
 ---
 
 ## 🚀 Key Features
 
 - **🏎️ Hardware Accelerated**: Leverages NVIDIA CUDA for near-instant transcription on modern GPUs.
-- **✨ Intelligent Auto-Detect**: Automatically switches between your preferred languages (e.g., English, Romanian, German) while ignoring others.
+- **✨ Intelligent Auto-Detect**: Automatically switches between your preferred languages while ignoring others.
 - **📦 Model Management**: Download, select, and delete models (Tiny to Large-v3) directly within the app.
 - **🌊 Responsive Waveform**: Real-time audio visualization with high-energy peak detection.
 - **⌨️ Universal Injection**: Press `F2` to dictate anywhere—Word, Chrome, Slack, or your favorite IDE.
 - **🛡️ 100% Private**: Everything runs locally on your machine. No cloud, no subscriptions, no tracking.
+- **📊 Usage Statistics**: Track total words dictated, transcription count, dictation time, and time saved vs. typing.
+- **🌐 Network Trigger API**: Control recording remotely via a local REST API (`POST /start`, `/stop`, `/toggle`) with optional Bearer token authentication and optional transcription text return.
+- **📝 Transcription Logging**: Optionally save all transcriptions to daily JSON log files (`yyyy-mm-dd.json`) with timestamps and durations.
 
 ---
 
