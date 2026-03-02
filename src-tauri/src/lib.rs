@@ -1,6 +1,7 @@
 mod commands;
 mod errors;
 mod models;
+mod network_trigger;
 mod settings;
 mod stats;
 mod whisper;
@@ -286,6 +287,11 @@ pub fn run() {
                 }
             }
 
+            // Auto-start network trigger server if enabled
+            if settings.network_trigger_enabled {
+                network_trigger::start_server(app.handle());
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -336,6 +342,10 @@ pub fn run() {
             open_settings,
             set_pill_collapsed,
             get_stats,
+            set_network_trigger,
+            set_network_trigger_password,
+            set_network_trigger_port,
+            get_local_ip,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

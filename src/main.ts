@@ -14,6 +14,9 @@ interface AppSettings {
   recording_shortcut: string;
   max_recording_seconds: number;
   pill_collapsed: boolean;
+  network_trigger_enabled: boolean;
+  network_trigger_port: number;
+  network_trigger_password: string;
 }
 
 /** Mirrors the Rust ModelMetadata struct */
@@ -55,6 +58,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   const hotkeyDisplay = document.getElementById("hotkey-display") as HTMLElement;
   const appVersionDisplay = document.getElementById("app-version") as HTMLElement;
   let isRecordingHotkey = false;
+
+  // Network Trigger elements
+  const networkTriggerToggle = document.getElementById("network-trigger-toggle") as HTMLInputElement;
+  const networkConfig = document.getElementById("network-config") as HTMLElement;
+  const networkPortInput = document.getElementById("network-port-input") as HTMLInputElement;
+  const networkPasswordInput = document.getElementById("network-password-input") as HTMLInputElement;
+  let networkLocalIp = "127.0.0.1";
 
   const sidebarNav = document.getElementById("sidebar-nav") as HTMLElement;
   const sections = document.querySelectorAll(".content-section");
@@ -125,6 +135,92 @@ window.addEventListener("DOMContentLoaded", async () => {
       console.error("Failed to load stats:", err);
     }
   }
+
+  // ── Network Trigger Logic ───────────────────────────────────────────────
+
+  async function updateNetworkEndpoints() {
+    try {
+      networkLocalIp = await invoke<string>("get_local_ip");
+    } catch {
+      networkLocalIp = "127.0.0.1";
+    }
+    const port = networkPortInput.value || "9876";
+    const base = `http://${networkLocalIp}:${port}`;
+    const password = networkPasswordInput.value;
+    const authHeader = password ? ` -H "Authorization: Bearer ${password}"` : "";
+
+    const ipDisplay = document.getElementById("network-ip-display");
+    if (ipDisplay) ipDisplay.innerText = `Listening on ${base}`;
+
+    const startUrl = document.getElementById("endpoint-start-url");
+    const stopUrl = document.getElementById("endpoint-stop-url");
+    const toggleUrl = document.getElementById("endpoint-toggle-url");
+    if (startUrl) startUrl.innerText = `${base}/start`;
+    if (stopUrl) stopUrl.innerText = `${base}/stop`;
+    if (toggleUrl) toggleUrl.innerText = `${base}/toggle`;
+
+    const curlStartCmd = document.getElementById("curl-start-cmd");
+    const curlStopCmd = document.getElementById("curl-stop-cmd");
+    const curlToggleCmd = document.getElementById("curl-toggle-cmd");
+    if (curlStartCmd) curlStartCmd.innerText = `curl -X POST${authHeader} ${base}/start`;
+    if (curlStopCmd) curlStopCmd.innerText = `curl -X POST${authHeader} ${base}/stop`;
+    if (curlToggleCmd) curlToggleCmd.innerText = `curl -X POST${authHeader} ${base}/toggle`;
+  }
+
+  networkTriggerToggle.addEventListener("change", async () => {
+    const enabled = networkTriggerToggle.checked;
+    try {
+      await invoke("set_network_trigger", { enabled });
+      networkConfig.classList.toggle("hidden", !enabled);
+      if (enabled) {
+        await updateNetworkEndpoints();
+      }
+      statusText.innerText = enabled ? "Network Trigger enabled" : "Network Trigger disabled";
+    } catch (err) {
+      statusText.innerText = `Error: ${err}`;
+    }
+  });
+
+  let portDebounce: ReturnType<typeof setTimeout>;
+  networkPortInput.addEventListener("change", async () => {
+    clearTimeout(portDebounce);
+    portDebounce = setTimeout(async () => {
+      const port = parseInt(networkPortInput.value) || 9876;
+      try {
+        await invoke("set_network_trigger_port", { port });
+        await updateNetworkEndpoints();
+        statusText.innerText = `API port set to ${port}`;
+      } catch (err) {
+        statusText.innerText = `Error: ${err}`;
+      }
+    }, 500);
+  });
+
+  let passwordDebounce: ReturnType<typeof setTimeout>;
+  networkPasswordInput.addEventListener("input", () => {
+    clearTimeout(passwordDebounce);
+    passwordDebounce = setTimeout(async () => {
+      const password = networkPasswordInput.value;
+      try {
+        await invoke("set_network_trigger_password", { password });
+        await updateNetworkEndpoints();
+        statusText.innerText = password ? "API password updated" : "API password removed";
+      } catch (err) {
+        statusText.innerText = `Error: ${err}`;
+      }
+    }, 800);
+  });
+
+  // Toggle curl example visibility on endpoint click
+  ["start", "stop", "toggle"].forEach(action => {
+    const btn = document.getElementById(`endpoint-${action}`);
+    const curlPanel = document.getElementById(`curl-${action}`);
+    if (btn && curlPanel) {
+      btn.addEventListener("click", () => {
+        curlPanel.classList.toggle("hidden");
+      });
+    }
+  });
 
   listen("model-download-status", (event: any) => {
     modelStatus.innerText = event.payload as string;
@@ -311,6 +407,15 @@ window.addEventListener("DOMContentLoaded", async () => {
         audioInputSelect.add(option);
       });
       audioInputSelect.value = settings.input_device || "";
+
+      // Populate network trigger settings
+      networkTriggerToggle.checked = settings.network_trigger_enabled;
+      networkPortInput.value = String(settings.network_trigger_port);
+      networkPasswordInput.value = settings.network_trigger_password || "";
+      networkConfig.classList.toggle("hidden", !settings.network_trigger_enabled);
+      if (settings.network_trigger_enabled) {
+        updateNetworkEndpoints();
+      }
 
     } catch (error) {
       console.error("Failed to load settings:", error);

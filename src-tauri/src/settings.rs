@@ -19,6 +19,9 @@ pub struct AppSettings {
     pub max_recording_seconds: u32,
     pub pill_collapsed: bool,
     pub show_pill: bool,
+    pub network_trigger_enabled: bool,
+    pub network_trigger_port: u16,
+    pub network_trigger_password: String,
 }
 
 impl Default for AppSettings {
@@ -36,6 +39,9 @@ impl Default for AppSettings {
             max_recording_seconds: 180,
             pill_collapsed: false,
             show_pill: true,
+            network_trigger_enabled: false,
+            network_trigger_port: 9876,
+            network_trigger_password: String::new(),
         }
     }
 }

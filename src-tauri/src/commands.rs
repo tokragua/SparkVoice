@@ -57,6 +57,64 @@ pub fn get_stats(app: tauri::AppHandle) -> AppStats {
     stats::load_stats(&app)
 }
 
+#[tauri::command]
+pub fn set_network_trigger(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) {
+    {
+        let mut settings = state.settings.lock();
+        settings.network_trigger_enabled = enabled;
+        save_settings(&app, &settings);
+    }
+    if enabled {
+        crate::network_trigger::start_server(&app);
+    } else {
+        crate::network_trigger::stop_server();
+    }
+    info!("Network Trigger {}", if enabled { "enabled" } else { "disabled" });
+}
+
+#[tauri::command]
+pub fn set_network_trigger_password(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    password: String,
+) {
+    let mut settings = state.settings.lock();
+    settings.network_trigger_password = password;
+    save_settings(&app, &settings);
+    // Restart server if running to pick up new password
+    if settings.network_trigger_enabled {
+        drop(settings);
+        crate::network_trigger::stop_server();
+        crate::network_trigger::start_server(&app);
+    }
+}
+
+#[tauri::command]
+pub fn set_network_trigger_port(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    port: u16,
+) {
+    let mut settings = state.settings.lock();
+    settings.network_trigger_port = port;
+    save_settings(&app, &settings);
+    // Restart server if running to pick up new port
+    if settings.network_trigger_enabled {
+        drop(settings);
+        crate::network_trigger::stop_server();
+        crate::network_trigger::start_server(&app);
+    }
+}
+
+#[tauri::command]
+pub fn get_local_ip() -> String {
+    crate::network_trigger::get_local_ip()
+}
+
 // ── Settings Commands ───────────────────────────────────────────────────────
 
 #[tauri::command]
