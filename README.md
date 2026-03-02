@@ -17,9 +17,6 @@ SparkVoice is a high-performance, privacy-focused desktop dictation tool that ev
 
 ![Statistics](screenshots/statistics.png)
 
-### Network API
-
-![Network API](screenshots/api.png)
 
 ---
 
