@@ -127,6 +127,18 @@ pub fn get_local_ip() -> String {
     crate::network_trigger::get_local_ip()
 }
 
+#[tauri::command]
+pub fn set_transcription_logging(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) {
+    let mut settings = state.settings.lock();
+    settings.transcription_logging_enabled = enabled;
+    save_settings(&app, &settings);
+    info!("Transcription logging {}", if enabled { "enabled" } else { "disabled" });
+}
+
 // ── Settings Commands ───────────────────────────────────────────────────────
 
 #[tauri::command]

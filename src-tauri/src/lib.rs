@@ -347,6 +347,7 @@ pub fn run() {
             set_network_trigger_port,
             get_local_ip,
             set_network_trigger_return_text,
+            set_transcription_logging,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

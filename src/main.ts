@@ -18,6 +18,7 @@ interface AppSettings {
   network_trigger_port: number;
   network_trigger_password: string;
   network_trigger_return_text: boolean;
+  transcription_logging_enabled: boolean;
 }
 
 /** Mirrors the Rust ModelMetadata struct */
@@ -50,6 +51,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const myLanguagesList = document.getElementById("my-languages-list") as HTMLUListElement;
   const addLanguageBtn = document.getElementById("add-language-btn") as HTMLButtonElement;
   const launchStartupToggle = document.getElementById("launch-startup-toggle") as HTMLInputElement;
+  const transcriptionLoggingToggle = document.getElementById("transcription-logging-toggle") as HTMLInputElement;
   const maxRecordingInput = document.getElementById("max-recording-input") as HTMLInputElement;
   const statusText = document.getElementById("status-text") as HTMLElement;
 
@@ -251,6 +253,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       if (launchStartupToggle) {
         launchStartupToggle.checked = settings.launch_on_startup;
       }
+      transcriptionLoggingToggle.checked = settings.transcription_logging_enabled || false;
 
       if (maxRecordingInput) {
         maxRecordingInput.value = settings.max_recording_seconds.toString();
@@ -494,6 +497,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   launchStartupToggle.addEventListener("change", async () => {
     try {
       await invoke("set_launch_on_startup", { enabled: launchStartupToggle.checked });
+    } catch (err) {
+      statusText.innerText = `Error: ${err}`;
+    }
+  });
+
+  transcriptionLoggingToggle.addEventListener("change", async () => {
+    try {
+      await invoke("set_transcription_logging", { enabled: transcriptionLoggingToggle.checked });
+      statusText.innerText = transcriptionLoggingToggle.checked ? "Transcription logging enabled" : "Transcription logging disabled";
     } catch (err) {
       statusText.innerText = `Error: ${err}`;
     }
