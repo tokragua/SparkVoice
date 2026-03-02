@@ -17,6 +17,7 @@ interface AppSettings {
   network_trigger_enabled: boolean;
   network_trigger_port: number;
   network_trigger_password: string;
+  network_trigger_return_text: boolean;
 }
 
 /** Mirrors the Rust ModelMetadata struct */
@@ -64,6 +65,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const networkConfig = document.getElementById("network-config") as HTMLElement;
   const networkPortInput = document.getElementById("network-port-input") as HTMLInputElement;
   const networkPasswordInput = document.getElementById("network-password-input") as HTMLInputElement;
+  const networkReturnTextToggle = document.getElementById("network-return-text-toggle") as HTMLInputElement;
   let networkLocalIp = "127.0.0.1";
 
   const sidebarNav = document.getElementById("sidebar-nav") as HTMLElement;
@@ -209,6 +211,15 @@ window.addEventListener("DOMContentLoaded", async () => {
         statusText.innerText = `Error: ${err}`;
       }
     }, 800);
+  });
+
+  networkReturnTextToggle.addEventListener("change", async () => {
+    try {
+      await invoke("set_network_trigger_return_text", { enabled: networkReturnTextToggle.checked });
+      statusText.innerText = networkReturnTextToggle.checked ? "Return text enabled" : "Return text disabled";
+    } catch (err) {
+      statusText.innerText = `Error: ${err}`;
+    }
   });
 
   // Toggle curl example visibility on endpoint click
@@ -412,6 +423,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       networkTriggerToggle.checked = settings.network_trigger_enabled;
       networkPortInput.value = String(settings.network_trigger_port);
       networkPasswordInput.value = settings.network_trigger_password || "";
+      networkReturnTextToggle.checked = settings.network_trigger_return_text || false;
       networkConfig.classList.toggle("hidden", !settings.network_trigger_enabled);
       if (settings.network_trigger_enabled) {
         updateNetworkEndpoints();

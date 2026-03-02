@@ -321,6 +321,27 @@
                 class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono text-sm">
             </div>
 
+            <!-- Return Text -->
+            <div
+              class="glass-panel rounded-2xl p-5 flex items-center justify-between group hover:border-primary/30 transition-all duration-300">
+              <div class="flex items-center gap-5">
+                <div
+                  class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                  <span class="material-symbols-outlined">reply</span>
+                </div>
+                <div class="flex flex-col">
+                  <p class="text-white text-lg font-semibold">Return Text</p>
+                  <p class="text-[#9cbaa6] text-sm">Include transcribed text in the API response on stop.</p>
+                </div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="network-return-text-toggle" class="sr-only peer">
+                <div
+                  class="w-14 h-7 bg-[#28392e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-[0_0_10px_rgba(13,242,89,0.5)]">
+                </div>
+              </label>
+            </div>
+
             <!-- API Endpoints -->
             <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
               <h3 class="text-primary text-xs font-bold uppercase tracking-widest mb-1">API Endpoints</h3>

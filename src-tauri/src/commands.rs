@@ -111,6 +111,18 @@ pub fn set_network_trigger_port(
 }
 
 #[tauri::command]
+pub fn set_network_trigger_return_text(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) {
+    let mut settings = state.settings.lock();
+    settings.network_trigger_return_text = enabled;
+    save_settings(&app, &settings);
+    info!("Network Trigger return text {}", if enabled { "enabled" } else { "disabled" });
+}
+
+#[tauri::command]
 pub fn get_local_ip() -> String {
     crate::network_trigger::get_local_ip()
 }

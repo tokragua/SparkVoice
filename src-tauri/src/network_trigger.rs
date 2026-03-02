@@ -1,7 +1,7 @@
 use log::{error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Listener, Manager};
 
 use crate::AppState;
 use crate::commands::stop_and_transcribe;
@@ -124,7 +124,15 @@ pub fn start_server(app: &AppHandle) {
             };
 
             let (status, body) = match result {
-                Ok(msg) => (200, format!(r#"{{"status":"ok","action":"{}"}}"#, msg)),
+                Ok((action, text_opt)) => {
+                    let mut json = format!(r#"{{"status":"ok","action":"{}"}}"#, action);
+                    if let Some(text) = text_opt {
+                        // Build JSON with text field
+                        let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+                        json = format!(r#"{{"status":"ok","action":"{}","text":"{}"}}"#, action, escaped);
+                    }
+                    (200, json)
+                }
                 Err(msg) => (500, format!(r#"{{"error":"{}"}}"#, msg)),
             };
 
@@ -164,11 +172,11 @@ pub fn stop_server() {
     }
 }
 
-fn handle_start(app: &AppHandle) -> Result<String, String> {
+fn handle_start(app: &AppHandle) -> Result<(String, Option<String>), String> {
     let state = app.state::<AppState>();
     let mut ws = state.whisper_state.lock();
     if ws.is_recording {
-        return Ok("already_recording".into());
+        return Ok(("already_recording".into(), None));
     }
     let max_recording_seconds = state.settings.lock().max_recording_seconds;
     ws.is_recording = true;
@@ -178,11 +186,12 @@ fn handle_start(app: &AppHandle) -> Result<String, String> {
 
     let _ = app.emit("recording-toggled", true);
     info!("Network Trigger: recording started");
-    Ok("started".into())
+    Ok(("started".into(), None))
 }
 
-fn handle_stop(app: &AppHandle) -> Result<String, String> {
+fn handle_stop(app: &AppHandle) -> Result<(String, Option<String>), String> {
     let state = app.state::<AppState>();
+    let return_text = state.settings.lock().network_trigger_return_text;
     let was_recording = {
         let mut ws = state.whisper_state.lock();
         let was = ws.is_recording;
@@ -192,15 +201,43 @@ fn handle_stop(app: &AppHandle) -> Result<String, String> {
 
     if was_recording {
         let _ = app.emit("recording-toggled", false);
-        stop_and_transcribe(app.clone());
-        info!("Network Trigger: recording stopped");
-        Ok("stopped".into())
+
+        if return_text {
+            // Set up a channel to receive the transcribed text
+            let (tx, rx) = std::sync::mpsc::channel::<String>();
+            let event_id = app.listen("transcribed-text", move |event| {
+                // Payload is JSON-serialized string, e.g. "\"hello world\""
+                let payload = event.payload().to_string();
+                // Strip surrounding quotes from the JSON string
+                let text = payload.trim_matches('"').to_string();
+                let _ = tx.send(text);
+            });
+
+            stop_and_transcribe(app.clone());
+
+            // Wait up to 120 seconds for transcription to complete
+            let text = match rx.recv_timeout(std::time::Duration::from_secs(120)) {
+                Ok(t) => Some(t),
+                Err(_) => {
+                    info!("Network Trigger: transcription timed out waiting for text");
+                    None
+                }
+            };
+            app.unlisten(event_id);
+
+            info!("Network Trigger: recording stopped (with text)");
+            Ok(("stopped".into(), text))
+        } else {
+            stop_and_transcribe(app.clone());
+            info!("Network Trigger: recording stopped");
+            Ok(("stopped".into(), None))
+        }
     } else {
-        Ok("not_recording".into())
+        Ok(("not_recording".into(), None))
     }
 }
 
-fn handle_toggle(app: &AppHandle) -> Result<String, String> {
+fn handle_toggle(app: &AppHandle) -> Result<(String, Option<String>), String> {
     let state = app.state::<AppState>();
     let is_recording = {
         let ws = state.whisper_state.lock();

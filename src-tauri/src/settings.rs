@@ -22,6 +22,7 @@ pub struct AppSettings {
     pub network_trigger_enabled: bool,
     pub network_trigger_port: u16,
     pub network_trigger_password: String,
+    pub network_trigger_return_text: bool,
 }
 
 impl Default for AppSettings {
@@ -42,6 +43,7 @@ impl Default for AppSettings {
             network_trigger_enabled: false,
             network_trigger_port: 9876,
             network_trigger_password: String::new(),
+            network_trigger_return_text: false,
         }
     }
 }
