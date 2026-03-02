@@ -184,6 +184,14 @@ fn handle_start(app: &AppHandle) -> Result<(String, Option<String>), String> {
     ws.audio_buffer.clear();
     drop(ws);
 
+    // If starting recording and pill is hidden, force show it
+    let is_hidden = !state.settings.lock().show_pill;
+    if is_hidden {
+        if let Some(pill) = app.get_webview_window("pill") {
+            let _ = pill.show();
+        }
+    }
+
     let _ = app.emit("recording-toggled", true);
     info!("Network Trigger: recording started");
     Ok(("started".into(), None))

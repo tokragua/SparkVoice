@@ -311,6 +311,16 @@ pub fn toggle_recording(app: tauri::AppHandle, state: tauri::State<'_, AppState>
         ws.is_recording
     };
 
+    // If starting recording and pill is hidden, force show it so the user can see recording status
+    if is_recording {
+        let is_hidden = !state.settings.lock().show_pill;
+        if is_hidden {
+            if let Some(pill) = app.get_webview_window("pill") {
+                let _ = pill.show();
+            }
+        }
+    }
+
     let _ = app.emit("recording-toggled", is_recording);
 
     if !is_recording {

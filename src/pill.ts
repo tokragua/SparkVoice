@@ -205,10 +205,26 @@ pillContainer.addEventListener("mousedown", (e: MouseEvent) => {
 
 console.log("SparkVoice Pill Ready");
 
-listen("recording-toggled", (event) => {
+let wasAutoShown = false;
+
+listen("recording-toggled", async (event) => {
     isRecording = event.payload as boolean;
+    console.log(`[Pill] recording-toggled: ${isRecording}`);
+
     if (isRecording) {
         pillContainer.classList.add("recording");
+        // Check settings to see if it's supposed to be hidden
+        try {
+            const settings: any = await invoke("get_settings");
+            console.log(`[Pill] settings.show_pill: ${settings.show_pill}`);
+            if (!settings.show_pill) {
+                wasAutoShown = true;
+                console.log(`[Pill] wasAutoShown set to true`);
+                // Backend forcefully showed it, we just mark it for hiding later
+            }
+        } catch (e) {
+            console.error(e);
+        }
     } else {
         pillContainer.classList.remove("recording");
     }
@@ -216,10 +232,19 @@ listen("recording-toggled", (event) => {
 
 listen("transcribing-toggled", (event) => {
     isTranscribing = event.payload as boolean;
+    console.log(`[Pill] transcribing-toggled: ${isTranscribing}, wasAutoShown: ${wasAutoShown}`);
+
     if (isTranscribing) {
         pillContainer.classList.add("transcribing");
     } else {
         pillContainer.classList.remove("transcribing");
+        // If we auto-showed the pill, hide it again now that work is done
+        if (wasAutoShown) {
+            console.log(`[Pill] Hiding pill because wasAutoShown is true`);
+            wasAutoShown = false;
+            const win = getCurrentWindow();
+            win.hide().catch(console.error);
+        }
     }
 });
 
