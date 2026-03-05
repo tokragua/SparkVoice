@@ -28,6 +28,7 @@ pub struct AppSettings {
     pub llm_mind_map_enabled: bool,
     pub llm_api_url: String,
     pub llm_model: String,
+    pub llm_node_cap: usize,
 }
 
 impl Default for AppSettings {
@@ -53,6 +54,7 @@ impl Default for AppSettings {
             llm_mind_map_enabled: false,
             llm_api_url: "http://localhost:11434/api/generate".to_string(),
             llm_model: "qwen2.5:3b-instruct-q4_k_m".to_string(),
+            llm_node_cap: 4000,
         }
     }
 }

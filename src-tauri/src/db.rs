@@ -86,6 +86,10 @@ pub fn init_db(app: &tauri::AppHandle) -> Result<()> {
         "CREATE INDEX IF NOT EXISTS idx_relationships_target ON relationships(target_id)",
         [],
     )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_relationships_dedup ON relationships(source_id, target_id, relation_type, source_log_file)",
+        [],
+    )?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS parsed_logs (
@@ -298,7 +302,7 @@ pub fn get_triplets(
 pub fn get_all_entities(app: &tauri::AppHandle) -> Result<Vec<Entity>> {
     let path = get_db_path(app);
     let conn = open_db(&path)?;
-    
+
     let mut stmt = conn.prepare("SELECT id, name, entity_type FROM entities")?;
     let iter = stmt.query_map([], |row| {
         Ok(Entity {
@@ -307,7 +311,36 @@ pub fn get_all_entities(app: &tauri::AppHandle) -> Result<Vec<Entity>> {
             entity_type: row.get(2)?,
         })
     })?;
-    
+
+    let mut results = Vec::new();
+    for item in iter {
+        results.push(item?);
+    }
+    Ok(results)
+}
+
+pub fn get_entities_by_ids(app: &tauri::AppHandle, ids: &[i64]) -> Result<Vec<Entity>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let path = get_db_path(app);
+    let conn = open_db(&path)?;
+
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let query = format!(
+        "SELECT id, name, entity_type FROM entities WHERE id IN ({})",
+        placeholders
+    );
+
+    let mut stmt = conn.prepare(&query)?;
+    let iter = stmt.query_map(rusqlite::params_from_iter(ids), |row| {
+        Ok(Entity {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            entity_type: row.get(2)?,
+        })
+    })?;
+
     let mut results = Vec::new();
     for item in iter {
         results.push(item?);

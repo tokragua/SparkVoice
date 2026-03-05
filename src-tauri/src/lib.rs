@@ -390,6 +390,7 @@ pub fn run() {
             set_llm_mind_map,
             set_llm_api_url,
             set_llm_model,
+            set_llm_node_cap,
             get_mind_map_graph,
             clear_mind_map_database,
         ])

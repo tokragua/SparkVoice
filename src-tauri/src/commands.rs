@@ -668,21 +668,15 @@ pub fn get_mind_map_graph(
         to_date.as_deref(),
     ).map_err(|e| e.to_string())?;
     
-    // Extract unique entities from edges
-    let mut node_ids = std::collections::HashSet::new();
-    let mut nodes = Vec::new();
-    
+    // Collect unique entity IDs referenced by the returned edges
+    let mut node_id_set = std::collections::HashSet::new();
     for edge in &edges {
-        node_ids.insert(edge.source_id);
-        node_ids.insert(edge.target_id);
+        node_id_set.insert(edge.source_id);
+        node_id_set.insert(edge.target_id);
     }
-    
-    let all_entities = crate::db::get_all_entities(&app).map_err(|e| e.to_string())?;
-    for entity in all_entities {
-        if node_ids.contains(&entity.id) {
-            nodes.push(entity);
-        }
-    }
+    let node_ids: Vec<i64> = node_id_set.into_iter().collect();
+
+    let nodes = crate::db::get_entities_by_ids(&app, &node_ids).map_err(|e| e.to_string())?;
 
     Ok(MindMapGraph {
         nodes,
@@ -721,6 +715,15 @@ pub fn set_llm_model(app: tauri::AppHandle, model: String) -> Result<(), String>
     let state = app.state::<crate::AppState>();
     let mut settings = state.settings.lock();
     settings.llm_model = model;
+    crate::settings::save_settings(&app, &settings);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_llm_node_cap(app: tauri::AppHandle, cap: usize) -> Result<(), String> {
+    let state = app.state::<crate::AppState>();
+    let mut settings = state.settings.lock();
+    settings.llm_node_cap = cap.max(100); // enforce a reasonable minimum
     crate::settings::save_settings(&app, &settings);
     Ok(())
 }

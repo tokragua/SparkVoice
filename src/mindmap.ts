@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface AppSettings {
     llm_mind_map_enabled: boolean;
+    llm_node_cap: number;
 }
 
 interface DBGraphNode {
@@ -207,17 +208,21 @@ function buildGraph(entries: LogEntry[]): { nodes: MindNode[]; edges: Edge[] } {
 
 // ── Force-directed layout ────────────────────────────────────────────────────
 
-function runLayout(
+async function runLayout(
     nodes: MindNode[],
     edges: Edge[],
     iterations = 300
-): void {
+): Promise<void> {
     const REPEL = 8000;
     const ATTRACT = 0.04;
     const DAMPING = 0.85;
     const CENTER_PULL = 0.003;
 
-    for (let iter = 0; iter < iterations; iter++) {
+    // Scale down iterations for large graphs to avoid multi-second hangs
+    const adaptiveIters = Math.max(30, Math.min(iterations, Math.floor(36000 / nodes.length)));
+    const YIELD_EVERY = 10; // yield to browser event loop every N iterations
+
+    for (let iter = 0; iter < adaptiveIters; iter++) {
         // Repel
         for (let i = 0; i < nodes.length; i++) {
             for (let j = i + 1; j < nodes.length; j++) {
@@ -251,6 +256,10 @@ function runLayout(
             n.vy *= DAMPING;
             n.x += n.vx;
             n.y += n.vy;
+        }
+        // Yield to browser so UI stays responsive
+        if ((iter + 1) % YIELD_EVERY === 0) {
+            await new Promise<void>(resolve => setTimeout(resolve, 0));
         }
     }
 }
@@ -714,6 +723,7 @@ async function main() {
         console.warn("Could not load settings in mind map:", e);
     }
     const isLLMEnabled = settings?.llm_mind_map_enabled ?? false;
+    const llmNodeCap = settings?.llm_node_cap ?? 4000;
 
     // Default range: last 7 days
     const today = new Date();
@@ -768,13 +778,16 @@ async function main() {
                     return;
                 }
 
+                // Cap nodes for layout performance (configurable in settings)
+                const cappedNodes = dbGraph.nodes.slice(0, llmNodeCap);
+
                 // Map DB IDs to array indices for edges
                 const idToIndex = new Map<number, number>();
-                dbGraph.nodes.forEach((dbn, i) => idToIndex.set(dbn.id, i));
+                cappedNodes.forEach((dbn, i) => idToIndex.set(dbn.id, i));
 
                 // Convert DB graph to visual MindNode/Edge format
-                nodes = dbGraph.nodes.map((dbn, i) => {
-                    const angle = (i / dbGraph.nodes.length) * Math.PI * 2;
+                nodes = cappedNodes.map((dbn, i) => {
+                    const angle = (i / cappedNodes.length) * Math.PI * 2;
                     const r = 300 + Math.random() * 200;
                     return {
                         id: i,
@@ -793,11 +806,18 @@ async function main() {
                     };
                 });
 
+                // Deduplicate edges by undirected node pair to avoid visual clutter
+                // from the same relationship appearing across multiple log files
+                const edgeSet = new Set<string>();
                 for (const dbe of dbGraph.edges) {
                     const idxA = idToIndex.get(dbe.source_id);
                     const idxB = idToIndex.get(dbe.target_id);
                     if (idxA !== undefined && idxB !== undefined) {
-                        edges.push({ a: idxA, b: idxB, strength: 1.0 });
+                        const key = `${Math.min(idxA, idxB)}-${Math.max(idxA, idxB)}`;
+                        if (!edgeSet.has(key)) {
+                            edgeSet.add(key);
+                            edges.push({ a: idxA, b: idxB, strength: 1.0 });
+                        }
                     }
                 }
                 entryCount = edges.length; // Approximate "entries" as edges plotted
@@ -840,13 +860,14 @@ async function main() {
             }
 
             // Run force directed layout and render
-            runLayout(nodes, edges, 300);
+            await runLayout(nodes, edges, 300);
             renderer.load(nodes, edges);
             renderer.setStats(nodes.length, edges.length, entryCount);
         } catch (err) {
             console.error("Mind map error:", err);
+            const errText = String(err).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             emptyState.querySelector("p")!.innerHTML =
-                `Failed to load logs: <strong>${err}</strong>`;
+                `Failed to load logs: <strong>${errText}</strong>`;
             emptyState.classList.remove("hidden");
         } finally {
             btnCreate.textContent = "Create";

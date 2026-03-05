@@ -22,6 +22,7 @@ interface AppSettings {
   llm_mind_map_enabled: boolean;
   llm_api_url: string;
   llm_model: string;
+  llm_node_cap: number;
 }
 
 /** Mirrors the Rust ModelMetadata struct */
@@ -62,6 +63,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const llmConfig = document.getElementById("llm-config") as HTMLElement;
   const llmUrlInput = document.getElementById("llm-url-input") as HTMLInputElement;
   const llmModelInput = document.getElementById("llm-model-input") as HTMLInputElement;
+  const llmNodeCapInput = document.getElementById("llm-node-cap-input") as HTMLInputElement;
 
   const modelList = document.getElementById("model-list") as HTMLElement;
   const modelStatus = document.getElementById("model-status") as HTMLElement;
@@ -274,6 +276,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
       if (llmUrlInput) llmUrlInput.value = settings.llm_api_url || "http://localhost:11434/api/generate";
       if (llmModelInput) llmModelInput.value = settings.llm_model || "qwen2.5:3b-instruct-q4_k_m";
+      if (llmNodeCapInput) llmNodeCapInput.value = String(settings.llm_node_cap ?? 4000);
 
       if (hotkeyDisplay) {
         hotkeyDisplay.innerText = settings.recording_shortcut;
@@ -574,6 +577,22 @@ window.addEventListener("DOMContentLoaded", async () => {
         statusText.innerText = "LLM Model saved";
       } catch (err) {
         statusText.innerText = `Error: ${err}`;
+      }
+    }, 800);
+  });
+
+  let llmNodeCapDebounce: ReturnType<typeof setTimeout>;
+  llmNodeCapInput.addEventListener("input", () => {
+    clearTimeout(llmNodeCapDebounce);
+    llmNodeCapDebounce = setTimeout(async () => {
+      const cap = parseInt(llmNodeCapInput.value, 10);
+      if (!isNaN(cap) && cap >= 100) {
+        try {
+          await invoke("set_llm_node_cap", { cap });
+          statusText.innerText = "Node cap saved";
+        } catch (err) {
+          statusText.innerText = `Error: ${err}`;
+        }
       }
     }, 800);
   });

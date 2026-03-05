@@ -488,6 +488,22 @@
                 class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono text-sm">
             </div>
 
+            <!-- Node Cap -->
+            <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
+              <div class="flex items-center gap-5">
+                <div
+                  class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                  <span class="material-symbols-outlined">hub</span>
+                </div>
+                <div class="flex flex-col flex-1">
+                  <p class="text-white text-lg font-semibold">Max Nodes in Mind Map</p>
+                  <p class="text-[#9cbaa6] text-sm">Limits how many entities are rendered. Minimum 100.</p>
+                </div>
+              </div>
+              <input type="number" id="llm-node-cap-input" min="100" step="100" placeholder="4000"
+                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono text-sm">
+            </div>
+
             <div class="flex justify-center mt-2">
               <button id="btn-clear-mind-map"
                 class="px-4 py-2 bg-red-900/20 text-red-400 border border-red-900/30 rounded-lg hover:bg-red-900/30 transition-all text-xs font-medium">
