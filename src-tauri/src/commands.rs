@@ -590,6 +590,28 @@ pub fn stop_and_transcribe(app: tauri::AppHandle) {
     });
 }
 
+#[tauri::command]
+pub fn clear_mind_map_database(app: tauri::AppHandle) -> Result<(), String> {
+    use crate::db::{get_db_path};
+    use rusqlite::Connection;
+
+    log::info!("Clearing Mind Map Database...");
+    let path = get_db_path(&app);
+    let mut conn = Connection::open(&path).map_err(|e| e.to_string())?;
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM relationships", []).map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM entities", []).map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM parsed_logs", []).map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+
+    // Physically shrink the database file
+    let _ = conn.execute("VACUUM", []);
+
+    log::info!("Mind Map Database cleared and vacuumed.");
+    Ok(())
+}
+
 fn perform_transcription(
     app: &tauri::AppHandle,
     tx: &mpsc::Sender<String>,
@@ -619,4 +641,86 @@ fn perform_transcription(
             let _ = app.emit("status-update", "Transcription error.");
         }
     }
+}
+
+// ── Mind Map Commands ────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct MindMapGraph {
+    pub nodes: Vec<crate::db::Entity>,
+    pub edges: Vec<crate::db::Relationship>,
+}
+
+#[tauri::command]
+pub fn get_mind_map_graph(
+    app: tauri::AppHandle, 
+    limit: usize, 
+    keyword: Option<String>,
+    from_date: Option<String>,
+    to_date: Option<String>,
+) -> Result<MindMapGraph, String> {
+    log::info!("Fetching Mind Map Graph. Limit: {}, From: {:?}, To: {:?}", limit, from_date, to_date);
+    let edges = crate::db::get_triplets(
+        &app, 
+        limit, 
+        keyword.as_deref(),
+        from_date.as_deref(),
+        to_date.as_deref(),
+    ).map_err(|e| e.to_string())?;
+    
+    // Extract unique entities from edges
+    let mut node_ids = std::collections::HashSet::new();
+    let mut nodes = Vec::new();
+    
+    for edge in &edges {
+        node_ids.insert(edge.source_id);
+        node_ids.insert(edge.target_id);
+    }
+    
+    let all_entities = crate::db::get_all_entities(&app).map_err(|e| e.to_string())?;
+    for entity in all_entities {
+        if node_ids.contains(&entity.id) {
+            nodes.push(entity);
+        }
+    }
+
+    Ok(MindMapGraph {
+        nodes,
+        edges,
+    })
+}
+
+#[tauri::command]
+pub fn set_llm_mind_map(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let state = app.state::<crate::AppState>();
+    let mut settings = state.settings.lock();
+    settings.llm_mind_map_enabled = enabled;
+    crate::settings::save_settings(&app, &settings);
+    
+    if enabled {
+        log::info!("LLM Mind Map enabled. Triggering historical migration...");
+        let app_clone = app.clone();
+        std::thread::spawn(move || {
+            let _ = crate::migration::run_historical_migration(&app_clone);
+        });
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_llm_api_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let state = app.state::<crate::AppState>();
+    let mut settings = state.settings.lock();
+    settings.llm_api_url = url;
+    crate::settings::save_settings(&app, &settings);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_llm_model(app: tauri::AppHandle, model: String) -> Result<(), String> {
+    let state = app.state::<crate::AppState>();
+    let mut settings = state.settings.lock();
+    settings.llm_model = model;
+    crate::settings::save_settings(&app, &settings);
+    Ok(())
 }

@@ -24,6 +24,10 @@ pub struct AppSettings {
     pub network_trigger_password: String,
     pub network_trigger_return_text: bool,
     pub transcription_logging_enabled: bool,
+    // --- LLM Mind Map ---
+    pub llm_mind_map_enabled: bool,
+    pub llm_api_url: String,
+    pub llm_model: String,
 }
 
 impl Default for AppSettings {
@@ -43,9 +47,12 @@ impl Default for AppSettings {
             show_pill: true,
             network_trigger_enabled: false,
             network_trigger_port: 9876,
-            network_trigger_password: String::new(),
+            network_trigger_password: "".to_string(),
             network_trigger_return_text: false,
             transcription_logging_enabled: false,
+            llm_mind_map_enabled: false,
+            llm_api_url: "http://localhost:11434/api/generate".to_string(),
+            llm_model: "qwen2.5:3b-instruct-q4_k_m".to_string(),
         }
     }
 }

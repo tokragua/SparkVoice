@@ -69,10 +69,10 @@ pub fn record_transcription(app: &AppHandle, text: &str, audio_duration_seconds:
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct TranscriptionLogEntry {
-    timestamp: String,
-    text: String,
-    duration: f64,
+pub struct TranscriptionLogEntry {
+    pub timestamp: String,
+    pub text: String,
+    pub duration: f64,
 }
 
 fn log_transcription(app: &AppHandle, text: &str, audio_duration_seconds: f64) {
@@ -122,6 +122,51 @@ fn log_transcription(app: &AppHandle, text: &str, audio_duration_seconds: f64) {
         Err(e) => {
             log::error!("Failed to serialize transcription log: {}", e);
         }
+    }
+
+    // Pipeline: LLM Mind Map Extraction
+    let state = app.state::<crate::AppState>();
+    let app_settings = state.settings.lock().clone();
+
+    if app_settings.llm_mind_map_enabled {
+        let state = app.state::<crate::AppState>();
+        let is_migrating = state.is_migrating.load(std::sync::atomic::Ordering::SeqCst);
+        
+        if is_migrating {
+            log::info!("Migration is running. Skipping immediate graph extraction for this transcription.");
+            return;
+        }
+
+        let app_handle_clone = app.clone();
+        let text_clone = text.to_string();
+        let source_file = format!("{}.json", date_str);
+        let new_index = entries.len();
+        
+        std::thread::spawn(move || {
+            log::info!("Starting background graph extraction for new transcription...");
+            match crate::llm::extract_knowledge(&app_settings, &text_clone) {
+                Ok(triplets) => {
+                    if let Err(e) = crate::db::upsert_triplets(&app_handle_clone, &triplets, &source_file) {
+                        log::error!("Failed to save extracted relationships to DB: {}", e);
+                    } else {
+                        log::info!("Successfully updated Knowledge Graph database");
+                        
+                        // GAP DETECTION: Only advance the cursor if there are no gaps behind this message.
+                        // new_index = entries.len(). If it's the 10th message (index 9), new_index is 10.
+                        // We only advance if the current DB index is 9.
+                        let current_db_idx = crate::db::get_log_parsing_index(&app_handle_clone, &source_file).unwrap_or(0);
+                        if current_db_idx == new_index - 1 {
+                            let _ = crate::db::update_log_parsing_index(&app_handle_clone, &source_file, new_index);
+                        } else {
+                            log::info!("Knowledge Graph gap detected (DB index {} vs new entry {}). Triplets saved, but cursor remains at {} to allow migration to fill the gap.", current_db_idx, new_index, current_db_idx);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("Knowledge extraction failed: {}", e);
+                }
+            }
+        });
     }
 }
 

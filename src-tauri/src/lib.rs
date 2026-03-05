@@ -5,6 +5,9 @@ mod network_trigger;
 mod settings;
 mod stats;
 mod whisper;
+pub mod db;
+pub mod llm;
+pub mod migration;
 
 use crate::commands::*;
 use crate::models::*;
@@ -35,6 +38,7 @@ pub struct AppState {
     pub device_tx: Mutex<mpsc::Sender<Option<String>>>,
     pub typer_tx: mpsc::Sender<String>,
     pub is_transcribing: Mutex<bool>,
+    pub is_migrating: Arc<AtomicBool>,
     pub is_cancelled: Arc<AtomicBool>,
     /// (model_name, use_gpu, context)
     pub model_cache: Mutex<Option<(String, bool, Arc<WhisperContext>)>>,
@@ -135,6 +139,19 @@ pub fn run() {
         .setup(move |app| {
             let settings = load_settings(app.handle());
 
+            // Initialize local SQLite database
+            if let Err(e) = db::init_db(app.handle()) {
+                log::error!("Failed to initialize database: {}", e);
+            }
+
+            // Run historical JSON migration in the background
+            let app_handle_for_migration = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Err(e) = migration::run_historical_migration(&app_handle_for_migration) {
+                    log::error!("Historical migration failed: {}", e);
+                }
+            });
+
             app.manage(AppState {
                 whisper_state: Arc::new(Mutex::new(WhisperState {
                     is_recording: false,
@@ -157,6 +174,7 @@ pub fn run() {
                 },
                 model_cache: Mutex::new(None),
                 is_transcribing: Mutex::new(false),
+                is_migrating: Arc::new(AtomicBool::new(false)),
                 is_cancelled: Arc::new(AtomicBool::new(false)),
                 pill_save_timer: Mutex::new(Instant::now()),
             });
@@ -285,6 +303,18 @@ pub fn run() {
                 let _ = pill.set_focusable(false);
                 let state = app.state::<AppState>();
                 let settings = state.settings.lock();
+
+                // Initialize Knowledge Graph Database
+                let _ = db::init_db(app.handle());
+
+                // Run historical migration in background
+                let app_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    if let Err(e) = migration::run_historical_migration(&app_handle) {
+                        error!("Historical migration failed: {}", e);
+                    }
+                });
+
                 let _ = pill.set_position(tauri::PhysicalPosition::new(
                     settings.pill_x as i32,
                     settings.pill_y as i32,
@@ -319,7 +349,7 @@ pub fn run() {
                 }
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" {
+                if window.label() == "main" || window.label() == "mind_map" {
                     let _ = window.hide();
                     api.prevent_close();
                 }
@@ -357,6 +387,11 @@ pub fn run() {
             set_transcription_logging,
             get_transcription_logs,
             open_mind_map,
+            set_llm_mind_map,
+            set_llm_api_url,
+            set_llm_model,
+            get_mind_map_graph,
+            clear_mind_map_database,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

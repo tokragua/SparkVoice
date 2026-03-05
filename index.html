@@ -62,6 +62,11 @@
           <span class="text-sm font-medium">Network</span>
         </a>
         <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] transition-all group" href="#"
+          data-section="mindmap">
+          <span class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">hub</span>
+          <span class="text-sm font-medium">Mind Map</span>
+        </a>
+        <a class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-[#9cbaa6] transition-all group" href="#"
           data-section="stats">
           <span
             class="material-symbols-outlined text-[24px] group-hover:text-primary transition-colors">bar_chart</span>
@@ -416,6 +421,86 @@
           </div>
         </section>
 
+        <!-- Section: Mind Map -->
+        <section id="section-mindmap" class="content-section hidden flex flex-col gap-4">
+          <div class="flex flex-col gap-2 mb-4">
+            <h2 class="text-4xl font-bold text-white tracking-tight">Mind Map</h2>
+            <p class="text-[#9cbaa6] text-lg font-light">Configure LLM-powered knowledge graph extraction.</p>
+          </div>
+
+          <div
+            class="glass-panel rounded-2xl p-5 flex items-center justify-between group hover:border-primary/30 transition-all duration-300">
+            <div class="flex items-center gap-5">
+              <div
+                class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                <span class="material-symbols-outlined">hub</span>
+              </div>
+              <div class="flex flex-col">
+                <p class="text-white text-lg font-semibold group-hover:text-primary transition-colors">Enable Knowledge
+                  Graph</p>
+                <p class="text-[#9cbaa6] text-sm">Use a local LLM to extract highly accurate Entity-Relationship graphs
+                  from voice logs.</p>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="llm-mindmap-toggle" class="sr-only peer">
+              <div
+                class="w-14 h-7 bg-[#28392e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary peer-checked:shadow-[0_0_10px_rgba(13,242,89,0.5)]">
+              </div>
+            </label>
+          </div>
+
+          <div id="llm-config" class="hidden flex flex-col gap-4">
+            <!-- API URL -->
+            <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
+              <div class="flex items-center gap-5">
+                <div
+                  class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                  <span class="material-symbols-outlined">link</span>
+                </div>
+                <div class="flex flex-col flex-1">
+                  <p class="text-white text-lg font-semibold">Local LLM API URL</p>
+                  <p class="text-[#9cbaa6] text-sm">Example: http://localhost:11434/api/generate (Ollama)</p>
+                </div>
+                <button id="btn-ollama-guide"
+                  class="ml-auto px-4 py-2 bg-[#28392e] hover:bg-primary/20 hover:text-primary text-white text-sm font-semibold rounded-lg transition-colors border border-transparent hover:border-primary/30 flex items-center gap-2">
+                  <span class="material-symbols-outlined text-[18px]">help</span>
+                  How to Install
+                </button>
+              </div>
+              <input type="text" id="llm-url-input" placeholder="http://localhost:11434/api/generate"
+                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono text-sm">
+            </div>
+
+            <!-- Model Name -->
+            <div class="glass-panel rounded-2xl p-6 flex flex-col gap-4">
+              <div class="flex items-center gap-5">
+                <div
+                  class="flex items-center justify-center rounded-xl bg-[#28392e] text-primary shrink-0 size-12 shadow-inner shadow-black/20">
+                  <span class="material-symbols-outlined">psychology</span>
+                </div>
+                <div class="flex flex-col flex-1">
+                  <p class="text-white text-lg font-semibold">LLM Model Name</p>
+                  <p class="text-[#9cbaa6] text-sm">Example: qwen2.5:3b-instruct-q4_k_m</p>
+                </div>
+              </div>
+              <input type="text" id="llm-model-input" placeholder="qwen2.5:3b-instruct-q4_k_m"
+                class="w-full bg-[#1a261e] text-white border border-[#28392e] rounded-xl px-4 py-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono text-sm">
+            </div>
+
+            <div class="flex justify-center mt-2">
+              <button id="btn-clear-mind-map"
+                class="px-4 py-2 bg-red-900/20 text-red-400 border border-red-900/30 rounded-lg hover:bg-red-900/30 transition-all text-xs font-medium">
+                Clear & Re-sync Data
+              </button>
+            </div>
+
+            <p class="text-[#9cbaa6] text-xs px-2 text-center mt-2">
+              Note: Extraction runs in the background. It may take a minute for new dictations to appear on the graph.
+            </p>
+          </div>
+        </section>
+
         <!-- Section: Stats -->
         <section id="section-stats" class="content-section hidden flex flex-col gap-4">
           <div class="flex flex-col gap-2 mb-4">
@@ -490,6 +575,88 @@
       </div>
     </div>
   </main>
+
+  <!-- Ollama Installation Guide Modal -->
+  <div id="ollama-guide-modal"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
+    <div
+      class="bg-[#111813] border border-[#28392e] rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col scale-95 transition-transform duration-300"
+      id="ollama-guide-content">
+      <div class="p-6 border-b border-[#28392e] flex items-center justify-between bg-[#0a0f0c]">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-primary text-2xl">download</span>
+          <h3 class="text-xl font-bold text-white tracking-tight">How to Install Ollama</h3>
+        </div>
+        <button id="btn-close-ollama-guide"
+          class="text-[#9cbaa6] hover:text-white transition-colors size-8 flex items-center justify-center rounded-lg hover:bg-white/5">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+      <div class="p-6 flex flex-col gap-6 overflow-y-auto max-h-[70vh]">
+        <!-- Step 1 -->
+        <div class="flex flex-col gap-3">
+          <h4 class="text-white font-bold text-lg flex items-center gap-2">
+            <span
+              class="bg-primary/20 text-primary size-6 rounded-full flex items-center justify-center text-xs">1</span>
+            Install Ollama
+          </h4>
+          <p class="text-[#9cbaa6] text-sm leading-relaxed">Download and install the Ollama application for your
+            operating system.</p>
+          <div
+            class="flex items-center justify-between bg-[#0a0f0c] border border-[#28392e] rounded-xl px-4 py-3 group">
+            <code class="text-white font-mono text-sm">https://ollama.com/download</code>
+            <button
+              class="ollama-copy-btn text-[#9cbaa6] hover:text-primary transition-colors flex items-center gap-1 text-xs font-bold uppercase"
+              data-copy="https://ollama.com/download">
+              <span class="material-symbols-outlined text-[16px]">content_copy</span> Copy
+            </button>
+          </div>
+        </div>
+        <!-- Step 2 -->
+        <div class="flex flex-col gap-3">
+          <h4 class="text-white font-bold text-lg flex items-center gap-2">
+            <span
+              class="bg-primary/20 text-primary size-6 rounded-full flex items-center justify-center text-xs">2</span>
+            Download a Model
+          </h4>
+          <p class="text-[#9cbaa6] text-sm leading-relaxed">Open your terminal or command prompt and run one of the
+            following commands to download a model. The model will run automatically when SparkVoice needs it.</p>
+
+          <div class="flex flex-col gap-2 mt-2">
+            <div class="flex justify-between items-end mb-1">
+              <span class="text-white font-semibold text-sm">Small & Fast (Recommended for &lt; 8GB VRAM)</span>
+              <span class="text-[#9cbaa6] text-xs">~2GB</span>
+            </div>
+            <div
+              class="flex items-center justify-between bg-[#0a0f0c] border border-[#28392e] rounded-xl px-4 py-3 group">
+              <code class="text-primary font-mono text-sm">ollama run qwen2.5:3b-instruct-q4_k_m</code>
+              <button
+                class="ollama-copy-btn text-[#9cbaa6] hover:text-primary transition-colors flex items-center gap-1 text-xs font-bold uppercase"
+                data-copy="ollama run qwen2.5:3b-instruct-q4_k_m">
+                <span class="material-symbols-outlined text-[16px]">content_copy</span> Copy
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2 mt-2">
+            <div class="flex justify-between items-end mb-1">
+              <span class="text-white font-semibold text-sm">Large & Accurate (Requires 8GB+ VRAM)</span>
+              <span class="text-[#9cbaa6] text-xs">~9GB</span>
+            </div>
+            <div
+              class="flex items-center justify-between bg-[#0a0f0c] border border-[#28392e] rounded-xl px-4 py-3 group">
+              <code class="text-primary font-mono text-sm">ollama run qwen2.5:14b-instruct-q4_k_m</code>
+              <button
+                class="ollama-copy-btn text-[#9cbaa6] hover:text-primary transition-colors flex items-center gap-1 text-xs font-bold uppercase"
+                data-copy="ollama run qwen2.5:14b-instruct-q4_k_m">
+                <span class="material-symbols-outlined text-[16px]">content_copy</span> Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>

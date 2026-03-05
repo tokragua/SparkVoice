@@ -19,6 +19,9 @@ interface AppSettings {
   network_trigger_password: string;
   network_trigger_return_text: boolean;
   transcription_logging_enabled: boolean;
+  llm_mind_map_enabled: boolean;
+  llm_api_url: string;
+  llm_model: string;
 }
 
 /** Mirrors the Rust ModelMetadata struct */
@@ -54,6 +57,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   const transcriptionLoggingToggle = document.getElementById("transcription-logging-toggle") as HTMLInputElement;
   const maxRecordingInput = document.getElementById("max-recording-input") as HTMLInputElement;
   const statusText = document.getElementById("status-text") as HTMLElement;
+
+  const llmMindmapToggle = document.getElementById("llm-mindmap-toggle") as HTMLInputElement;
+  const llmConfig = document.getElementById("llm-config") as HTMLElement;
+  const llmUrlInput = document.getElementById("llm-url-input") as HTMLInputElement;
+  const llmModelInput = document.getElementById("llm-model-input") as HTMLInputElement;
 
   const modelList = document.getElementById("model-list") as HTMLElement;
   const modelStatus = document.getElementById("model-status") as HTMLElement;
@@ -258,6 +266,14 @@ window.addEventListener("DOMContentLoaded", async () => {
       if (maxRecordingInput) {
         maxRecordingInput.value = settings.max_recording_seconds.toString();
       }
+
+      // Populate Mind Map settings
+      if (llmMindmapToggle) {
+        llmMindmapToggle.checked = settings.llm_mind_map_enabled || false;
+        llmConfig.classList.toggle("hidden", !settings.llm_mind_map_enabled);
+      }
+      if (llmUrlInput) llmUrlInput.value = settings.llm_api_url || "http://localhost:11434/api/generate";
+      if (llmModelInput) llmModelInput.value = settings.llm_model || "qwen2.5:3b-instruct-q4_k_m";
 
       if (hotkeyDisplay) {
         hotkeyDisplay.innerText = settings.recording_shortcut;
@@ -525,6 +541,68 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // LLM Mind Map Settings
+  llmMindmapToggle.addEventListener("change", async () => {
+    try {
+      await invoke("set_llm_mind_map", { enabled: llmMindmapToggle.checked });
+      llmConfig.classList.toggle("hidden", !llmMindmapToggle.checked);
+      statusText.innerText = llmMindmapToggle.checked ? "LLM Knowledge Graph enabled" : "LLM Knowledge Graph disabled";
+    } catch (err) {
+      statusText.innerText = `Error: ${err}`;
+    }
+  });
+
+  let llmUrlDebounce: ReturnType<typeof setTimeout>;
+  llmUrlInput.addEventListener("input", () => {
+    clearTimeout(llmUrlDebounce);
+    llmUrlDebounce = setTimeout(async () => {
+      try {
+        await invoke("set_llm_api_url", { url: llmUrlInput.value });
+        statusText.innerText = "LLM API URL saved";
+      } catch (err) {
+        statusText.innerText = `Error: ${err}`;
+      }
+    }, 800);
+  });
+
+  let llmModelDebounce: ReturnType<typeof setTimeout>;
+  llmModelInput.addEventListener("input", () => {
+    clearTimeout(llmModelDebounce);
+    llmModelDebounce = setTimeout(async () => {
+      try {
+        await invoke("set_llm_model", { model: llmModelInput.value });
+        statusText.innerText = "LLM Model saved";
+      } catch (err) {
+        statusText.innerText = `Error: ${err}`;
+      }
+    }, 800);
+  });
+
+  const btnClearMindMap = document.getElementById("btn-clear-mind-map") as HTMLButtonElement;
+  if (btnClearMindMap) {
+    btnClearMindMap.addEventListener("click", async () => {
+      const confirmed = confirm("This will delete all extracted entities and relationships and re-run the migration from your JSON logs. Continue?");
+      if (!confirmed) return;
+
+      btnClearMindMap.disabled = true;
+      btnClearMindMap.textContent = "Clearing...";
+
+      try {
+        await invoke("clear_mind_map_database");
+        statusText.innerText = "Database cleared! Re-syncing in background...";
+        btnClearMindMap.textContent = "Done! Re-syncing...";
+        setTimeout(() => {
+          btnClearMindMap.disabled = false;
+          btnClearMindMap.textContent = "Clear & Re-sync Data";
+        }, 3000);
+      } catch (err) {
+        statusText.innerText = `Error: ${err}`;
+        btnClearMindMap.disabled = false;
+        btnClearMindMap.textContent = "Error - Try again";
+      }
+    });
+  }
+
   addLanguageBtn.addEventListener("click", async () => {
     const lang = availableLanguagesSelect.value;
     if (lang) {
@@ -641,5 +719,55 @@ window.addEventListener("DOMContentLoaded", async () => {
       isRecordingHotkey = false;
       hotkeyDisplay.classList.remove("ring-2", "ring-primary", "animate-pulse");
     }
+  });
+
+  // Ollama Guide Modal
+  const btnOllamaGuide = document.getElementById("btn-ollama-guide");
+  const modalOllamaGuide = document.getElementById("ollama-guide-modal");
+  const btnCloseOllamaGuide = document.getElementById("btn-close-ollama-guide");
+
+  if (btnOllamaGuide && modalOllamaGuide && btnCloseOllamaGuide) {
+    btnOllamaGuide.addEventListener("click", () => {
+      modalOllamaGuide.classList.remove("opacity-0", "pointer-events-none");
+      const content = document.getElementById("ollama-guide-content");
+      if (content) content.classList.remove("scale-95");
+    });
+
+    btnCloseOllamaGuide.addEventListener("click", () => {
+      modalOllamaGuide.classList.add("opacity-0", "pointer-events-none");
+      const content = document.getElementById("ollama-guide-content");
+      if (content) content.classList.add("scale-95");
+    });
+
+    // Close on out-of-bounds click
+    modalOllamaGuide.addEventListener("click", (e) => {
+      if (e.target === modalOllamaGuide) {
+        modalOllamaGuide.classList.add("opacity-0", "pointer-events-none");
+        const content = document.getElementById("ollama-guide-content");
+        if (content) content.classList.add("scale-95");
+      }
+    });
+  }
+
+  // Ollama Guide Copy Buttons
+  document.querySelectorAll(".ollama-copy-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      const target = e.currentTarget as HTMLButtonElement;
+      const text = target.getAttribute("data-copy");
+      if (text) {
+        try {
+          await navigator.clipboard.writeText(text);
+          const originalHTML = target.innerHTML;
+          target.innerHTML = `<span class="material-symbols-outlined text-[16px]">check</span> Copied!`;
+          target.classList.add("text-primary");
+          setTimeout(() => {
+            target.innerHTML = originalHTML;
+            target.classList.remove("text-primary");
+          }, 2000);
+        } catch (err) {
+          console.error("Failed to copy:", err);
+        }
+      }
+    });
   });
 });

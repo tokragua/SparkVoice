@@ -27,6 +27,18 @@ SparkVoice is a high-performance, privacy-focused desktop dictation tool that ev
 - **📊 Usage Statistics**: Track total words dictated, transcription count, dictation time, and time saved vs. typing.
 - **🌐 Network Trigger API**: Control recording remotely via a local REST API (`POST /start`, `/stop`, `/toggle`) with optional Bearer token authentication and optional transcription text return.
 - **📝 Transcription Logging**: Optionally save all transcriptions to daily JSON log files (`yyyy-mm-dd.json`) with timestamps and durations.
+- **🧠 LLM Knowledge Graph**: Generate a beautiful, interactive "Mind Map" of your thoughts. Extrapolate Entities and Relationships automatically from your voice logs using a local LLM!
+
+---
+
+## 🧠 Setting up the LLM Knowledge Graph (Mind Map)
+
+SparkVoice can use a local Large Language Model to read your transcriptions in the background and build a structured Entity-Relationship graph of your ideas.
+
+1. **Install Ollama**: Download and install [Ollama](https://ollama.com/) for your operating system.
+2. **Download a Model**: Open your terminal and run `ollama run qwen2.5:3b-instruct-q4_k_m` (or any other instruction-tuned model you prefer).
+3. **Enable in SparkVoice**: Open the SparkVoice **Settings**, navigate to the **Mind Map** tab, and toggle "Enable Knowledge Graph". Ensure the API URL (`http://localhost:11434/api/generate`) and Model Name match your Ollama setup.
+4. **View Graph**: Right-click the system tray icon and click "Mind Map"!
 
 ---
 

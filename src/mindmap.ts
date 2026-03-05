@@ -1,6 +1,29 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+interface AppSettings {
+    llm_mind_map_enabled: boolean;
+}
+
+interface DBGraphNode {
+    id: number;
+    name: string;
+    entity_type: string;
+}
+
+interface DBGraphEdge {
+    id: number;
+    source_id: number;
+    target_id: number;
+    relation_type: string;
+    context: string;
+}
+
+interface DBMindMapGraph {
+    nodes: DBGraphNode[];
+    edges: DBGraphEdge[];
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface LogEntry {
@@ -24,6 +47,7 @@ interface MindNode {
     radius: number;
     w: number;
     h: number;
+    degree: number;
 }
 
 interface Edge {
@@ -145,6 +169,7 @@ function buildGraph(entries: LogEntry[]): { nodes: MindNode[]; edges: Edge[] } {
             alpha: 0,
             radius: 0,
             w: 0, h: 0,
+            degree: 0,
         };
     });
 
@@ -313,6 +338,7 @@ class MindMapRenderer {
     private tooltipText: HTMLElement;
     private statsBar: HTMLElement;
     private wrap: HTMLElement;
+    private maxDegree = 1;
 
     constructor() {
         this.canvas = document.getElementById("map-canvas") as HTMLCanvasElement;
@@ -344,6 +370,7 @@ class MindMapRenderer {
     load(nodes: MindNode[], edges: Edge[]) {
         this.nodes = nodes;
         this.edges = edges;
+        this.maxDegree = Math.max(1, ...nodes.map(n => n.degree));
         // Compute node sizes
         const ctx = this.ctx;
         for (const n of nodes) {
@@ -471,9 +498,17 @@ class MindMapRenderer {
 
         // Filled rounded rect
         const grad = ctx.createLinearGradient(x, y, x, y + n.h);
+        const ratio = this.maxDegree > 0 ? (n.degree / this.maxDegree) : 0;
+
         if (n.isRoot) {
             grad.addColorStop(0, COLORS.rootFrom);
             grad.addColorStop(1, COLORS.rootTo);
+        } else if (ratio > 0) {
+            const h = 244 + (ratio * 116); // 244 (Indigo) -> 360 (Red)
+            const l1 = 20 + ratio * 15; // lighter when red (up to 35%)
+            const l2 = 34 + ratio * 15; // lighter when red (up to 49%)
+            grad.addColorStop(0, `hsl(${h}, 60%, ${l1}%)`);
+            grad.addColorStop(1, `hsl(${h}, 60%, ${l2}%)`);
         } else {
             grad.addColorStop(0, COLORS.nodeBgFrom);
             grad.addColorStop(1, COLORS.nodeBgTo);
@@ -485,15 +520,20 @@ class MindMapRenderer {
 
         // Border
         ctx.shadowBlur = 0;
+
+        let borderColor = n.isRoot ? COLORS.rootBorder : COLORS.nodeBorder;
+        if (!n.isRoot && ratio > 0) {
+            const h = 244 + (ratio * 116);
+            borderColor = `hsla(${h}, 80%, 65%, 0.5)`;
+        }
+
         ctx.strokeStyle = isSelected
             ? "rgba(167,139,250,1)"
             : (isConnected && hasSelection)
                 ? "rgba(129,140,248,0.9)"
                 : isHovered
                     ? COLORS.nodeHover
-                    : n.isRoot
-                        ? COLORS.rootBorder
-                        : COLORS.nodeBorder;
+                    : borderColor;
         ctx.lineWidth = isSelected ? 2 : (isConnected && hasSelection) ? 1.5 : isHovered ? 1.5 : 1;
         ctx.beginPath();
         this.roundRect(ctx, x, y, n.w, n.h, n.radius);
@@ -666,6 +706,15 @@ async function main() {
     const dateFrom = document.getElementById("date-from") as HTMLInputElement;
     const dateTo = document.getElementById("date-to") as HTMLInputElement;
 
+    // Check settings to see which mode we're in
+    let settings: AppSettings | null = null;
+    try {
+        settings = await invoke<AppSettings>("get_settings");
+    } catch (e) {
+        console.warn("Could not load settings in mind map:", e);
+    }
+    const isLLMEnabled = settings?.llm_mind_map_enabled ?? false;
+
     // Default range: last 7 days
     const today = new Date();
     const weekAgo = new Date(today);
@@ -699,34 +748,101 @@ async function main() {
         btnCreate.classList.add("loading");
 
         try {
-            const entries = await invoke<LogEntry[]>("get_transcription_logs", {
-                fromDate: from,
-                toDate: to,
-            });
+            let nodes: MindNode[] = [];
+            let edges: Edge[] = [];
+            let entryCount = 0;
 
-            if (!entries || entries.length === 0) {
-                emptyState.querySelector("p")!.innerHTML =
-                    `No transcription logs found between <strong>${from}</strong> and <strong>${to}</strong>.<br/>Try a wider date range.`;
-                emptyState.classList.remove("hidden");
-                return;
+            if (isLLMEnabled) {
+                // === LLM GRAPH MODE ===
+                const dbGraph = await invoke<DBMindMapGraph>("get_mind_map_graph", {
+                    limit: 10000,
+                    keyword: null,
+                    fromDate: from,
+                    toDate: to
+                });
+
+                if (!dbGraph || dbGraph.nodes.length === 0) {
+                    emptyState.querySelector("p")!.innerHTML =
+                        `No extracted entities found yet.<br/>Ensure the Knowledge Graph is enabled and you have active transcriptions.`;
+                    emptyState.classList.remove("hidden");
+                    return;
+                }
+
+                // Map DB IDs to array indices for edges
+                const idToIndex = new Map<number, number>();
+                dbGraph.nodes.forEach((dbn, i) => idToIndex.set(dbn.id, i));
+
+                // Convert DB graph to visual MindNode/Edge format
+                nodes = dbGraph.nodes.map((dbn, i) => {
+                    const angle = (i / dbGraph.nodes.length) * Math.PI * 2;
+                    const r = 300 + Math.random() * 200;
+                    return {
+                        id: i,
+                        label: dbn.name,
+                        fullText: `${dbn.name} (${dbn.entity_type})`,
+                        keywords: new Set([dbn.entity_type]), // Use type as topic
+                        x: Math.cos(angle) * r,
+                        y: Math.sin(angle) * r,
+                        vx: 0, vy: 0,
+                        isRoot: false,
+                        topic: dbn.entity_type,
+                        alpha: 0,
+                        radius: 0,
+                        w: 0, h: 0,
+                        degree: 0,
+                    };
+                });
+
+                for (const dbe of dbGraph.edges) {
+                    const idxA = idToIndex.get(dbe.source_id);
+                    const idxB = idToIndex.get(dbe.target_id);
+                    if (idxA !== undefined && idxB !== undefined) {
+                        edges.push({ a: idxA, b: idxB, strength: 1.0 });
+                    }
+                }
+                entryCount = edges.length; // Approximate "entries" as edges plotted
+                emptyState.classList.add("hidden");
+
+            } else {
+                // === LEGACY KEYWORD OVERLAP MODE ===
+                const entries = await invoke<LogEntry[]>("get_transcription_logs", {
+                    fromDate: from,
+                    toDate: to,
+                });
+
+                if (!entries || entries.length === 0) {
+                    emptyState.querySelector("p")!.innerHTML =
+                        `No transcription logs found between <strong>${from}</strong> and <strong>${to}</strong>.<br/>Try a wider date range.`;
+                    emptyState.classList.remove("hidden");
+                    return;
+                }
+
+                emptyState.classList.add("hidden");
+
+                // Build graph
+                const graph = buildGraph(entries);
+                nodes = graph.nodes;
+                edges = graph.edges;
+                entryCount = entries.length;
+
+                if (nodes.length === 0) {
+                    emptyState.querySelector("p")!.innerHTML =
+                        `Logs found but no meaningful sentences could be extracted.<br/>Try a wider date range.`;
+                    emptyState.classList.remove("hidden");
+                    return;
+                }
             }
 
-            emptyState.classList.add("hidden");
-
-            // Build graph
-            const { nodes, edges } = buildGraph(entries);
-
-            if (nodes.length === 0) {
-                emptyState.querySelector("p")!.innerHTML =
-                    `Logs found but no meaningful sentences could be extracted.<br/>Try a wider date range.`;
-                emptyState.classList.remove("hidden");
-                return;
+            // Calculate degrees
+            for (const ed of edges) {
+                nodes[ed.a].degree++;
+                nodes[ed.b].degree++;
             }
 
-            // Run force directed layout
+            // Run force directed layout and render
             runLayout(nodes, edges, 300);
             renderer.load(nodes, edges);
-            renderer.setStats(nodes.length, edges.length, entries.length);
+            renderer.setStats(nodes.length, edges.length, entryCount);
         } catch (err) {
             console.error("Mind map error:", err);
             emptyState.querySelector("p")!.innerHTML =

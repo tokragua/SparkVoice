@@ -28,6 +28,7 @@ src-tauri/full_build_log.txt
 src-tauri/build_log_devices.txt
 src-tauri/*.bin
 src-tauri/error.log
+src-tauri/build_error.txt
 sparkvoice_audit.md.resolved
 
 
