@@ -348,6 +348,9 @@ class MindMapRenderer {
     private statsBar: HTMLElement;
     private wrap: HTMLElement;
     private maxDegree = 1;
+    private filterIds: Set<number> | null = null;
+    private matchedIds: Set<number> = new Set();
+    private baseStats = { nodes: 0, edges: 0, entries: 0 };
 
     constructor() {
         this.canvas = document.getElementById("map-canvas") as HTMLCanvasElement;
@@ -380,6 +383,8 @@ class MindMapRenderer {
         this.nodes = nodes;
         this.edges = edges;
         this.maxDegree = Math.max(1, ...nodes.map(n => n.degree));
+        this.filterIds = null;
+        this.matchedIds = new Set();
         // Compute node sizes
         const ctx = this.ctx;
         for (const n of nodes) {
@@ -440,6 +445,8 @@ class MindMapRenderer {
             const b = this.nodes[e.b];
             const alpha = Math.min(a.alpha, b.alpha);
             if (alpha <= 0) continue;
+            // Hide edges where either endpoint is filtered out
+            if (this.filterIds !== null && (!this.filterIds.has(e.a) || !this.filterIds.has(e.b))) continue;
             const isHovered = a === this.hoveredNode || b === this.hoveredNode;
             const isSelected = this.selectedNode !== null &&
                 (a === this.selectedNode || b === this.selectedNode);
@@ -483,18 +490,25 @@ class MindMapRenderer {
         const isSelected = n === this.selectedNode;
         const hasSelection = this.selectedNode !== null;
         const isConnected = this.connectedNodeIds.has(n.id);
+        const isFiltering = this.filterIds !== null;
+        const filteredOut = isFiltering && !this.filterIds!.has(n.id);
+        const isMatched = isFiltering && this.matchedIds.has(n.id);
 
-        // Dim nodes not involved in current selection
-        const dimmed = hasSelection && !isSelected && !isConnected;
+        // Dim nodes not involved in current selection or outside the filter
+        const dimmedBySelection = hasSelection && !isSelected && !isConnected;
+        const dimmed = filteredOut || dimmedBySelection;
 
         const x = n.x - n.w / 2;
         const y = n.y - n.h / 2;
 
         ctx.save();
-        ctx.globalAlpha = n.alpha * (dimmed ? 0.18 : 1);
+        ctx.globalAlpha = n.alpha * (filteredOut ? 0.04 : dimmedBySelection ? 0.18 : 1);
 
         // Shadow / glow
-        if (isSelected) {
+        if (isMatched) {
+            ctx.shadowColor = "rgba(251,191,36,0.85)";
+            ctx.shadowBlur = 24;
+        } else if (isSelected) {
             ctx.shadowColor = "rgba(167,139,250,0.8)";
             ctx.shadowBlur = 28;
         } else if (isConnected && hasSelection) {
@@ -536,14 +550,16 @@ class MindMapRenderer {
             borderColor = `hsla(${h}, 80%, 65%, 0.5)`;
         }
 
-        ctx.strokeStyle = isSelected
-            ? "rgba(167,139,250,1)"
-            : (isConnected && hasSelection)
-                ? "rgba(129,140,248,0.9)"
-                : isHovered
-                    ? COLORS.nodeHover
-                    : borderColor;
-        ctx.lineWidth = isSelected ? 2 : (isConnected && hasSelection) ? 1.5 : isHovered ? 1.5 : 1;
+        ctx.strokeStyle = isMatched
+            ? "rgba(251,191,36,0.95)"
+            : isSelected
+                ? "rgba(167,139,250,1)"
+                : (isConnected && hasSelection)
+                    ? "rgba(129,140,248,0.9)"
+                    : isHovered
+                        ? COLORS.nodeHover
+                        : borderColor;
+        ctx.lineWidth = isMatched ? 2 : isSelected ? 2 : (isConnected && hasSelection) ? 1.5 : isHovered ? 1.5 : 1;
         ctx.beginPath();
         this.roundRect(ctx, x, y, n.w, n.h, n.radius);
         ctx.stroke();
@@ -551,13 +567,15 @@ class MindMapRenderer {
         // Text
         const fs = n.isRoot ? ROOT_FONT_SIZE : FONT_SIZE;
         ctx.font = `${n.isRoot ? 600 : 500} ${fs}px Inter, system-ui, sans-serif`;
-        ctx.fillStyle = isSelected
-            ? "#fff"
-            : (isConnected && hasSelection)
-                ? "#c4b5fd"
-                : n.isRoot
-                    ? COLORS.textRoot
-                    : (dimmed ? "#475569" : COLORS.text);
+        ctx.fillStyle = isMatched
+            ? "#fef3c7"
+            : isSelected
+                ? "#fff"
+                : (isConnected && hasSelection)
+                    ? "#c4b5fd"
+                    : n.isRoot
+                        ? COLORS.textRoot
+                        : (dimmed ? "#475569" : COLORS.text);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(n.label, n.x, n.y);
@@ -699,9 +717,71 @@ class MindMapRenderer {
     }
 
     setStats(nodes: number, edges: number, entries: number) {
-        this.statsBar.innerHTML =
-            `<span>${nodes}</span> nodes &nbsp;·&nbsp; <span>${edges}</span> connections &nbsp;·&nbsp; <span>${entries}</span> log entries`;
+        this.baseStats = { nodes, edges, entries };
+        this.renderStats();
+    }
+
+    private renderStats() {
+        const { nodes, edges, entries } = this.baseStats;
+        if (this.filterIds !== null) {
+            const matched = this.matchedIds.size;
+            const visible = this.filterIds.size;
+            this.statsBar.innerHTML = matched === 0
+                ? `<span>0</span> matches`
+                : `<span>${matched}</span> matched &nbsp;·&nbsp; <span>${visible}</span> visible &nbsp;·&nbsp; <span>${nodes}</span> total`;
+        } else {
+            this.statsBar.innerHTML =
+                `<span>${nodes}</span> nodes &nbsp;·&nbsp; <span>${edges}</span> connections &nbsp;·&nbsp; <span>${entries}</span> log entries`;
+        }
         this.statsBar.classList.add("visible");
+    }
+
+    setFilter(query: string) {
+        if (!query.trim()) {
+            this.filterIds = null;
+            this.matchedIds = new Set();
+            if (!this.animRunning) this.drawFrame();
+            this.renderStats();
+            return;
+        }
+
+        const q = query.toLowerCase();
+        const matchedIds = new Set<number>();
+        for (const n of this.nodes) {
+            if (n.label.toLowerCase().includes(q) || n.fullText.toLowerCase().includes(q)) {
+                matchedIds.add(n.id);
+            }
+        }
+
+        // Build adjacency map (node index → neighbor indices)
+        const adj = new Map<number, Set<number>>();
+        for (const e of this.edges) {
+            if (!adj.has(e.a)) adj.set(e.a, new Set());
+            if (!adj.has(e.b)) adj.set(e.b, new Set());
+            adj.get(e.a)!.add(e.b);
+            adj.get(e.b)!.add(e.a);
+        }
+
+        // 1st-degree neighbors of matched nodes
+        const firstDeg = new Set<number>();
+        for (const id of matchedIds) {
+            for (const nb of (adj.get(id) ?? [])) {
+                if (!matchedIds.has(nb)) firstDeg.add(nb);
+            }
+        }
+
+        // 2nd-degree neighbors (neighbors of 1st-degree, not already included)
+        const secondDeg = new Set<number>();
+        for (const id of firstDeg) {
+            for (const nb of (adj.get(id) ?? [])) {
+                if (!matchedIds.has(nb) && !firstDeg.has(nb)) secondDeg.add(nb);
+            }
+        }
+
+        this.filterIds = new Set([...matchedIds, ...firstDeg, ...secondDeg]);
+        this.matchedIds = matchedIds;
+        if (!this.animRunning) this.drawFrame();
+        this.renderStats();
     }
 }
 
@@ -714,6 +794,14 @@ async function main() {
     const btnFull = document.getElementById("btn-fullscreen") as HTMLButtonElement;
     const dateFrom = document.getElementById("date-from") as HTMLInputElement;
     const dateTo = document.getElementById("date-to") as HTMLInputElement;
+    const searchInput = document.getElementById("search-input") as HTMLInputElement;
+
+    // Live search / filter
+    searchInput.addEventListener("input", () => {
+        const q = searchInput.value;
+        searchInput.classList.toggle("has-value", q.length > 0);
+        renderer.setFilter(q);
+    });
 
     // Check settings to see which mode we're in
     let settings: AppSettings | null = null;
@@ -756,6 +844,8 @@ async function main() {
 
         btnCreate.textContent = "Building…";
         btnCreate.classList.add("loading");
+        searchInput.value = "";
+        searchInput.classList.remove("has-value");
 
         try {
             let nodes: MindNode[] = [];
