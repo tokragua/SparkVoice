@@ -76,6 +76,8 @@ struct TranscriptionLogEntry {
 }
 
 fn log_transcription(app: &AppHandle, text: &str, audio_duration_seconds: f64) {
+    use chrono::Local;
+
     let log_dir = app
         .path()
         .app_data_dir()
@@ -86,47 +88,10 @@ fn log_transcription(app: &AppHandle, text: &str, audio_duration_seconds: f64) {
         let _ = fs::create_dir_all(&log_dir);
     }
 
-    // Get current date/time
-    let now = std::time::SystemTime::now();
-    let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
-    let secs = duration.as_secs();
-
-    // Calculate date components (UTC)
-    let days = secs / 86400;
-    let mut year = 1970i64;
-    let mut remaining_days = days as i64;
-
-    loop {
-        let days_in_year = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 366 } else { 365 };
-        if remaining_days < days_in_year {
-            break;
-        }
-        remaining_days -= days_in_year;
-        year += 1;
-    }
-
-    let month_days = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
-        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    } else {
-        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    };
-
-    let mut month = 0u32;
-    for (i, &d) in month_days.iter().enumerate() {
-        if remaining_days < d {
-            month = i as u32 + 1;
-            break;
-        }
-        remaining_days -= d;
-    }
-    let day = remaining_days as u32 + 1;
-    let time_of_day = secs % 86400;
-    let hour = time_of_day / 3600;
-    let minute = (time_of_day % 3600) / 60;
-    let second = time_of_day % 60;
-
-    let date_str = format!("{:04}-{:02}-{:02}", year, month, day);
-    let timestamp = format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", year, month, day, hour, minute, second);
+    // Use local time so the filename matches the user's calendar day
+    let now = Local::now();
+    let date_str = now.format("%Y-%m-%d").to_string();
+    let timestamp = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
 
     let log_path = log_dir.join(format!("{}.json", date_str));
 
@@ -159,3 +124,4 @@ fn log_transcription(app: &AppHandle, text: &str, audio_duration_seconds: f64) {
         }
     }
 }
+

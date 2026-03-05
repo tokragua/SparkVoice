@@ -4,12 +4,15 @@
   "description": "Capability for the main window",
   "windows": [
     "main",
-    "pill"
+    "pill",
+    "mind_map"
   ],
   "permissions": [
     "core:default",
     "opener:default",
     "core:window:allow-hide",
-    "core:window:allow-show"
+    "core:window:allow-show",
+    "core:window:allow-maximize",
+    "core:window:allow-set-fullscreen"
   ]
 }

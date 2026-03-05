@@ -1,4 +1,5 @@
 use log::{error, info, warn};
+use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use tauri::{Emitter, Manager};
@@ -55,6 +56,102 @@ pub fn cancel_transcription(state: tauri::State<'_, AppState>) {
 #[tauri::command]
 pub fn get_stats(app: tauri::AppHandle) -> AppStats {
     stats::load_stats(&app)
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct TranscriptionEntry {
+    pub timestamp: String,
+    pub text: String,
+    pub duration: f64,
+}
+
+#[tauri::command]
+pub fn get_transcription_logs(
+    app: tauri::AppHandle,
+    from_date: String,
+    to_date: String,
+) -> Vec<TranscriptionEntry> {
+    use std::fs;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct RawEntry {
+        timestamp: String,
+        text: String,
+        duration: f64,
+    }
+
+    let log_dir = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("transcription_logs");
+
+    if !log_dir.exists() {
+        return Vec::new();
+    }
+
+    let mut all_entries: Vec<TranscriptionEntry> = Vec::new();
+
+    let mut date = from_date.clone();
+    // Iterate through each date in range
+    loop {
+        if date > to_date {
+            break;
+        }
+        let path = log_dir.join(format!("{}.json", date));
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(entries) = serde_json::from_str::<Vec<RawEntry>>(&content) {
+                    for e in entries {
+                        all_entries.push(TranscriptionEntry {
+                            timestamp: e.timestamp,
+                            text: e.text,
+                            duration: e.duration,
+                        });
+                    }
+                }
+            }
+        }
+        // Advance date by one day
+        date = advance_date(&date);
+    }
+
+    all_entries
+}
+
+fn advance_date(date_str: &str) -> String {
+    // Parse YYYY-MM-DD
+    let parts: Vec<&str> = date_str.split('-').collect();
+    if parts.len() != 3 {
+        return date_str.to_string();
+    }
+    let Ok(year) = parts[0].parse::<i32>() else { return date_str.to_string(); };
+    let Ok(month) = parts[1].parse::<u32>() else { return date_str.to_string(); };
+    let Ok(day) = parts[2].parse::<u32>() else { return date_str.to_string(); };
+
+    let days_in_month = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 29 } else { 28 },
+        _ => 30,
+    };
+
+    if day < days_in_month {
+        format!("{:04}-{:02}-{:02}", year, month, day + 1)
+    } else if month < 12 {
+        format!("{:04}-{:02}-{:02}", year, month + 1, 1)
+    } else {
+        format!("{:04}-{:02}-{:02}", year + 1, 1, 1)
+    }
+}
+
+#[tauri::command]
+pub fn open_mind_map(app: tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("mind_map") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
 #[tauri::command]

@@ -223,6 +223,7 @@ pub fn run() {
 
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let mind_map_i = MenuItem::with_id(app, "mind_map", "Mind Map", true, None::<&str>)?;
             let show_pill_i = tauri::menu::CheckMenuItem::with_id(
                 app,
                 "show_pill",
@@ -231,7 +232,7 @@ pub fn run() {
                 settings.show_pill,
                 None::<&str>,
             )?;
-            let menu = Menu::with_items(app, &[&show_pill_i, &settings_i, &quit_i])?;
+            let menu = Menu::with_items(app, &[&show_pill_i, &settings_i, &mind_map_i, &quit_i])?;
 
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
@@ -242,6 +243,12 @@ pub fn run() {
                     }
                     "settings" => {
                         if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "mind_map" => {
+                        if let Some(window) = app.get_webview_window("mind_map") {
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
@@ -348,6 +355,8 @@ pub fn run() {
             get_local_ip,
             set_network_trigger_return_text,
             set_transcription_logging,
+            get_transcription_logs,
+            open_mind_map,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

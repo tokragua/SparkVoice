@@ -17,6 +17,7 @@ export default defineConfig(async () => ({
       input: {
         main: "index.html",
         pill: "pill.html",
+        mindmap: "mindmap.html",
       },
     },
   },
