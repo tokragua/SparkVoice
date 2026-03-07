@@ -103,6 +103,7 @@ pub fn run() {
                     }),
                     Target::new(TargetKind::Webview),
                 ])
+                .level(log::LevelFilter::Debug)
                 .build(),
         )
         .plugin(tauri_plugin_autostart::init(
