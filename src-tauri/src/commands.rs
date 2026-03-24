@@ -35,6 +35,11 @@ pub fn is_cuda_supported() -> bool {
 }
 
 #[tauri::command]
+pub fn is_metal_supported() -> bool {
+    cfg!(feature = "metal")
+}
+
+#[tauri::command]
 pub fn open_settings(app: tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         if window.is_visible().unwrap_or(false) {
@@ -359,12 +364,12 @@ pub fn stop_and_transcribe(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         let state = app_handle.state::<AppState>();
         let model_name = settings.selected_model.clone();
-        let use_gpu = settings.device == "cuda";
+        let use_gpu = settings.device == "cuda" || settings.device == "metal";
 
         info!(
             "Transcription started: model={}, device={}, audio_duration={:.2}s",
             model_name,
-            if use_gpu { "CUDA" } else { "CPU" },
+            &settings.device,
             audio_data.len() as f32 / 16000.0
         );
 

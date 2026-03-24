@@ -49,7 +49,7 @@ pub struct AppState {
 pub fn run() {
     // Custom logging callback for whisper.cpp (must be C-compatible)
     unsafe extern "C" fn whisper_log_callback(
-        level: i32,
+        level: u32,
         message: *const std::ffi::c_char,
         _user_data: *mut std::ffi::c_void,
     ) {
@@ -85,7 +85,17 @@ pub fn run() {
                 .join("logs")
         })
         .unwrap_or_else(|_| std::path::PathBuf::from("."));
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    let log_dir = std::env::var("HOME")
+        .map(|h| {
+            std::path::PathBuf::from(h)
+                .join("Library")
+                .join("Application Support")
+                .join("com.sparkvoice.app")
+                .join("logs")
+        })
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let log_dir = std::path::PathBuf::from(".");
 
     tauri::Builder::default()
@@ -338,6 +348,7 @@ pub fn run() {
             set_max_recording_duration,
             get_app_version,
             is_cuda_supported,
+            is_metal_supported,
             cancel_transcription,
             open_settings,
             set_pill_collapsed,

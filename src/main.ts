@@ -389,26 +389,41 @@ window.addEventListener("DOMContentLoaded", async () => {
         modelList.appendChild(modelDiv);
       });
 
-      // Populate device and microphone
       // Populate device and compute device
       const isCudaSupported: boolean = await invoke("is_cuda_supported");
+      const isMetalSupported: boolean = await invoke("is_metal_supported");
       const cudaOption = deviceSelect.querySelector('option[value="cuda"]');
+      const metalOption = deviceSelect.querySelector('option[value="metal"]');
 
       if (!isCudaSupported) {
         if (cudaOption) {
           cudaOption.remove();
         }
-        // If current setting is cuda but not supported, fall back to cpu
         if (settings.device === "cuda") {
-          settings.device = "cpu";
-          await invoke("set_device", { device: "cpu" });
+          settings.device = isMetalSupported ? "metal" : "cpu";
+          await invoke("set_device", { device: settings.device });
         }
       } else if (!cudaOption) {
-        // Re-add if it was previously removed but now supported
         const option = document.createElement("option");
         option.value = "cuda";
         option.text = "CUDA GPU";
         deviceSelect.prepend(option);
+      }
+
+      if (!isMetalSupported) {
+        if (metalOption) {
+          metalOption.remove();
+        }
+        if (settings.device === "metal") {
+          settings.device = isCudaSupported ? "cuda" : "cpu";
+          await invoke("set_device", { device: settings.device });
+        }
+      } else if (!metalOption) {
+        const option = document.createElement("option");
+        option.value = "metal";
+        option.text = "Metal GPU";
+        const cpuOption = deviceSelect.querySelector('option[value="cpu"]');
+        deviceSelect.insertBefore(option, cpuOption);
       }
 
       deviceSelect.value = settings.device;

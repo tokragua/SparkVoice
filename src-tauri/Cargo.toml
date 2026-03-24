@@ -42,6 +42,7 @@ tiny_http = "0.12.0"
 default = []
 cuda = ["whisper-rs/cuda"]
 vulkan = ["whisper-rs/vulkan"]
+metal = ["whisper-rs/metal"]
 
 [profile.dev]
 opt-level = 3
