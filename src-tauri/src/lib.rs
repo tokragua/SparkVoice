@@ -243,9 +243,12 @@ pub fn run() {
             )?;
             let menu = Menu::with_items(app, &[&show_pill_i, &settings_i, &quit_i])?;
 
+            info!("Building tray icon...");
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("SparkVoice")
                 .menu(&menu)
+                .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => {
                         app.exit(0);
@@ -286,6 +289,11 @@ pub fn run() {
             // Apply saved pill configure
             if let Some(pill) = app.get_webview_window("pill") {
                 let _ = pill.set_focusable(false);
+                // macOS requires explicit transparent background on the webview
+                #[cfg(target_os = "macos")]
+                {
+                    let _ = pill.set_background_color(Some(tauri::utils::config::Color(0, 0, 0, 0)));
+                }
                 let state = app.state::<AppState>();
                 let settings = state.settings.lock();
                 let _ = pill.set_position(tauri::PhysicalPosition::new(

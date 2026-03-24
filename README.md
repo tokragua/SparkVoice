@@ -18,7 +18,7 @@ SparkVoice is a high-performance, privacy-focused desktop dictation tool that ev
 
 ## 🚀 Key Features
 
-- **🏎️ Hardware Accelerated**: Leverages NVIDIA CUDA for near-instant transcription on modern GPUs.
+- **🏎️ Hardware Accelerated**: Leverages NVIDIA CUDA (Windows) or Apple Metal (macOS) for near-instant transcription on modern GPUs.
 - **✨ Intelligent Auto-Detect**: Automatically switches between your preferred languages while ignoring others.
 - **📦 Model Management**: Download, select, and delete models (Tiny to Large-v3) directly within the app.
 - **🌊 Responsive Waveform**: Real-time audio visualization with high-energy peak detection.
@@ -32,14 +32,23 @@ SparkVoice is a high-performance, privacy-focused desktop dictation tool that ev
 
 ## 🛠️ Prerequisites
 
-Before compiling SparkVoice, ensure you have the following installed on your Windows system:
+### macOS
 
-### 1. Development Environment
+- **[Rust](https://rustup.rs/)**: The core backend language.
+- **[Node.js (LTS)](https://nodejs.org/)**: Required for the Tauri frontend.
+- **Xcode Command Line Tools**: Install with `xcode-select --install`.
+- **CMake**: Install with `brew install cmake`.
+
+> [!NOTE]
+> Metal GPU acceleration is available out of the box on Apple Silicon (M1/M2/M3/M4) and supported Intel Macs — no additional drivers or SDKs are needed.
+
+### Windows
+
 - **[Rust](https://rustup.rs/)**: The core backend language.
 - **[Node.js (LTS)](https://nodejs.org/)**: Required for the Tauri frontend.
 - **[Visual Studio 2022](https://visualstudio.microsoft.com/vs/community/)**: Install with the "Desktop development with C++" workload.
 
-### 2. GPU Acceleration (NVIDIA CUDA)
+#### GPU Acceleration (NVIDIA CUDA)
 To enable high-speed transcription on NVIDIA GPUs (RTX 20/30/40/50 series):
 
 1. **[CUDA Toolkit 12.x](https://developer.nvidia.com/cuda-downloads)** — Download and install the latest CUDA Toolkit for Windows. This includes **cuBLAS**, the GPU math library that whisper.cpp uses internally.
@@ -73,33 +82,54 @@ npm install
 ```
 
 ### 3. Run in Development Mode
-To start the app with local debugging:
 
-```powershell
-# 1. Standard Mode (Highly Portable / CPU-only)
-# Best for development on all hardware (Intel/AMD/NVIDIA).
+#### macOS
+```bash
+# Standard Mode (CPU-only)
 npm run tauri dev
 
-# 2. Performance Mode (NVIDIA GPU / CUDA)
-# Best for testing GPU acceleration. Requires CUDA Toolkit.
+# Metal GPU Acceleration (recommended for Apple Silicon)
+npm run tauri dev -- --features metal
+```
+
+#### Windows
+```powershell
+# Standard Mode (CPU-only)
+npm run tauri dev
+
+# CUDA GPU Acceleration (requires CUDA Toolkit)
 $env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
 npm run tauri dev -- --features cuda
 ```
 
 ---
 
-## 📦 Creating a Windows Executable (.exe / .msi)
+## 📦 Creating a Release Build
 
-To generate a production-ready installer:
+### macOS (.app / .dmg)
 
-### Standard Build (CPU-Only / Default)
-This build is highly portable and works on any Windows machine regardless of GPU.
+#### Standard Build (CPU-Only)
+```bash
+npm run tauri build
+```
+
+#### Metal Build (GPU Accelerated — recommended)
+```bash
+npm run tauri build -- --features metal
+```
+
+Output will be located in:
+- `src-tauri/target/release/bundle/macos/SparkVoice.app`
+- `src-tauri/target/release/bundle/dmg/SparkVoice_<version>_aarch64.dmg`
+
+### Windows (.exe / .msi)
+
+#### Standard Build (CPU-Only)
 ```powershell
 npm run tauri build
 ```
 
-### High-Performance Build (GPU/CUDA)
-This build enables hardware acceleration but requires the user to have an NVIDIA GPU and the CUDA Toolkit installed for compilation.
+#### CUDA Build (GPU Accelerated)
 ```powershell
 # Set LLVM Path for Bindings
 $env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
@@ -111,7 +141,7 @@ npm run tauri build -- --features cuda
 > [!TIP]
 > **Troubleshooting CUDA Builds**: If you see "Unresolved Externals" linker errors, ensure your `CUDA_PATH` environment variable is set correctly and that `LLVM` is installed and in your `PATH`.
 
-The output will be located in: `src-tauri/target/release/bundle/msi/`
+Output will be located in: `src-tauri/target/release/bundle/msi/`
 
 ---
 
@@ -119,13 +149,13 @@ The output will be located in: `src-tauri/target/release/bundle/msi/`
 
 - **Hotkey**: Default is `F2`. Press once to start recording, press again to transcribe.
 - **Models**: The first time you use a model, the app will download it automatically from HuggingFace.
-- **Device**: Switch between "CPU" and "CUDA" (GPU) in the Settings panel to optimize for your hardware.
+- **Device**: Switch between "CPU" and "GPU" (CUDA on Windows, Metal on macOS) in the Settings panel to optimize for your hardware.
 
 ---
 
 ## 📝 Roadmap
 
-- [ ] Add support for macOS
+- [x] Add support for macOS (with Metal GPU acceleration)
 
 ## 📄 License
 
