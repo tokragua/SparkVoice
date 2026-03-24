@@ -5,7 +5,7 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
-use crate::AppState;
+use crate::{AppState, AudioCommand};
 use crate::errors::AppError;
 use crate::models::{download_model_to_path, get_model_size_display, validate_model_name};
 use crate::settings::{save_settings, AppSettings};
@@ -157,16 +157,13 @@ pub fn set_input_device(
     state: tauri::State<'_, AppState>,
     device: String,
 ) -> Result<(), AppError> {
-    let tx = state.device_tx.lock();
-    tx.send(Some(device.clone()))
+    let tx = state.audio_cmd_tx.lock();
+    let device_opt = if device.is_empty() { None } else { Some(device.clone()) };
+    tx.send(AudioCommand::SetDevice(device_opt.clone()))
         .map_err(|e| AppError::AudioDevice(e.to_string()))?;
 
     let mut settings = state.settings.lock();
-    settings.input_device = if device.is_empty() {
-        None
-    } else {
-        Some(device)
-    };
+    settings.input_device = device_opt;
     save_settings(&app, &settings);
     Ok(())
 }
@@ -315,6 +312,17 @@ pub fn toggle_recording(app: tauri::AppHandle, state: tauri::State<'_, AppState>
 
         ws.is_recording
     };
+
+    // On macOS, start/stop the audio stream to control the orange microphone indicator
+    #[cfg(target_os = "macos")]
+    {
+        let tx = state.audio_cmd_tx.lock();
+        if is_recording {
+            let _ = tx.send(AudioCommand::StartStream);
+        } else {
+            let _ = tx.send(AudioCommand::StopStream);
+        }
+    }
 
     // If starting recording and pill is hidden, force show it so the user can see recording status
     if is_recording {

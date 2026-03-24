@@ -11,6 +11,9 @@ use crate::models::*;
 use crate::settings::{load_settings, save_settings, AppSettings};
 use crate::whisper::{capture_audio, WhisperState};
 
+#[cfg(target_os = "macos")]
+use cpal::traits::StreamTrait;
+
 use enigo::{Enigo, Keyboard, Settings};
 use log::{error, info, warn};
 use parking_lot::Mutex;
@@ -29,10 +32,22 @@ use whisper_rs::WhisperContext;
 
 // ── Shared Application State ────────────────────────────────────────────────
 
+/// Commands sent to the audio manager thread
+pub enum AudioCommand {
+    /// Switch to a different input device
+    SetDevice(Option<String>),
+    /// Start the audio capture stream (macOS only — on other platforms, stream is always active)
+    #[cfg(target_os = "macos")]
+    StartStream,
+    /// Stop the audio capture stream (macOS only)
+    #[cfg(target_os = "macos")]
+    StopStream,
+}
+
 pub struct AppState {
     pub whisper_state: Arc<Mutex<WhisperState>>,
     pub settings: Mutex<AppSettings>,
-    pub device_tx: Mutex<mpsc::Sender<Option<String>>>,
+    pub audio_cmd_tx: Mutex<mpsc::Sender<AudioCommand>>,
     pub typer_tx: mpsc::Sender<String>,
     pub is_transcribing: Mutex<bool>,
     pub is_cancelled: Arc<AtomicBool>,
@@ -75,7 +90,7 @@ pub fn run() {
         whisper_rs::set_log_callback(Some(whisper_log_callback), std::ptr::null_mut());
     }
 
-    let (tx, _rx) = mpsc::channel::<Option<String>>();
+    let (tx, _rx) = mpsc::channel::<AudioCommand>();
 
     #[cfg(target_os = "windows")]
     let log_dir = std::env::var("APPDATA")
@@ -153,7 +168,7 @@ pub fn run() {
                     max_samples: Some(settings.max_recording_seconds as usize * 16000),
                 })),
                 settings: Mutex::new(settings.clone()),
-                device_tx: Mutex::new(tx),
+                audio_cmd_tx: Mutex::new(tx),
                 typer_tx: {
                     let (typer_tx, typer_rx) = mpsc::channel::<String>();
                     std::thread::spawn(move || {
@@ -177,6 +192,13 @@ pub fn run() {
             let app_handle_for_listener = app.handle().clone();
             app.listen("recording-auto-stopped", move |_| {
                 info!("Automatic recording stop triggered by limit.");
+                // On macOS, stop the audio stream to dismiss the microphone indicator
+                #[cfg(target_os = "macos")]
+                {
+                    let state = app_handle_for_listener.state::<AppState>();
+                    let tx = state.audio_cmd_tx.lock();
+                    let _ = tx.send(AudioCommand::StopStream);
+                }
                 stop_and_transcribe(app_handle_for_listener.clone());
                 let _ = app_handle_for_listener.emit("recording-toggled", false);
             });
@@ -185,8 +207,8 @@ pub fn run() {
             let whisper_state = state.whisper_state.clone();
 
             // Audio Manager Thread
-            let (device_tx, device_rx) = mpsc::channel::<Option<String>>();
-            *state.device_tx.lock() = device_tx;
+            let (audio_cmd_tx, audio_cmd_rx) = mpsc::channel::<AudioCommand>();
+            *state.audio_cmd_tx.lock() = audio_cmd_tx;
 
             let whisper_state_for_audio = whisper_state.clone();
             let initial_device = settings.input_device.clone();
@@ -194,24 +216,79 @@ pub fn run() {
             let app_handle_for_audio = app.handle().clone();
             std::thread::spawn(move || {
                 let mut current_stream: Option<cpal::Stream> = None;
+                let mut current_device: Option<String> = initial_device;
 
-                // Initialize with saved device or default
-                if let Ok(stream) = capture_audio(
-                    app_handle_for_audio.clone(),
-                    whisper_state_for_audio.clone(),
-                    initial_device,
-                ) {
-                    current_stream = Some(stream);
-                }
-
-                while let Ok(device_name) = device_rx.recv() {
-                    current_stream = None; // Drop old stream
+                // On Windows, start streaming immediately (no microphone indicator issue).
+                // On macOS, defer streaming until recording starts to avoid the persistent
+                // orange microphone indicator in the menu bar.
+                #[cfg(not(target_os = "macos"))]
+                {
                     if let Ok(stream) = capture_audio(
                         app_handle_for_audio.clone(),
                         whisper_state_for_audio.clone(),
-                        device_name,
+                        current_device.clone(),
                     ) {
                         current_stream = Some(stream);
+                    }
+                }
+
+                while let Ok(cmd) = audio_cmd_rx.recv() {
+                    match cmd {
+                        AudioCommand::SetDevice(device_name) => {
+                            current_device = device_name;
+                            // On non-macOS, immediately restart the stream with the new device.
+                            // On macOS, just remember the device — stream starts on StartStream.
+                            #[cfg(not(target_os = "macos"))]
+                            {
+                                current_stream = None; // Drop old stream
+                                if let Ok(stream) = capture_audio(
+                                    app_handle_for_audio.clone(),
+                                    whisper_state_for_audio.clone(),
+                                    current_device.clone(),
+                                ) {
+                                    current_stream = Some(stream);
+                                }
+                            }
+                            #[cfg(target_os = "macos")]
+                            {
+                                // If stream is currently active (mid-recording device change),
+                                // restart it with the new device
+                                if current_stream.is_some() {
+                                    if let Some(ref stream) = current_stream {
+                                        let _ = stream.pause();
+                                    }
+                                    current_stream = None;
+                                    if let Ok(stream) = capture_audio(
+                                        app_handle_for_audio.clone(),
+                                        whisper_state_for_audio.clone(),
+                                        current_device.clone(),
+                                    ) {
+                                        current_stream = Some(stream);
+                                    }
+                                }
+                            }
+                        }
+                        #[cfg(target_os = "macos")]
+                        AudioCommand::StartStream => {
+                            if current_stream.is_none() {
+                                if let Ok(stream) = capture_audio(
+                                    app_handle_for_audio.clone(),
+                                    whisper_state_for_audio.clone(),
+                                    current_device.clone(),
+                                ) {
+                                    current_stream = Some(stream);
+                                }
+                            }
+                        }
+                        #[cfg(target_os = "macos")]
+                        AudioCommand::StopStream => {
+                            // Pause the stream before dropping to ensure CoreAudio
+                            // fully releases the microphone and dismisses the indicator
+                            if let Some(ref stream) = current_stream {
+                                let _ = stream.pause();
+                            }
+                            current_stream = None;
+                        }
                     }
                 }
             });
